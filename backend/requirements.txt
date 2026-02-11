@@ -8,3 +8,5 @@ pytest
 pytest-bdd
 httpx
 python-dotenv
+thefuzz
+python-Levenshtein
