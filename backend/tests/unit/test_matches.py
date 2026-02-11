@@ -94,3 +94,11 @@ def match_should_be_identified(
         f"Match esperado entre '{person_a}' y '{person_b}' no encontrado.\n"
         f"Matches detectados: {[{m.person_a.name, m.person_b.name} for m in context.matches]}"
     )
+    
+@then("no se debe identificar ningún match")
+def no_match_identified(context: MatchContext) -> None:
+    """
+    Verifica que la lista de matches esté vacía.
+    Esto confirma que el motor filtró correctamente la falta de reciprocidad.
+    """
+    assert len(context.matches) == 0, f"Se encontraron {len(context.matches)} matches inesperados."
