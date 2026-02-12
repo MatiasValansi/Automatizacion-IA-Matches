@@ -6,12 +6,15 @@ resultados de formularios ya procesados.
 
 No depende de infraestructura — es una función pura del dominio.
 """
-
 from app.core.entities import FormResult, Match, Participant
+from app.use_cases.name_normalizer import NameNormalizer # Importamos el traductor
 
-
-class MatchEngine:
+class MatchEngine:    
     """Detecta matches mutuos entre participantes."""
+
+    def __init__(self, normalizer: NameNormalizer):
+        # Guardamos la instancia para usarla en los métodos internos
+        self.normalizer = normalizer
 
     def find_matches(self, form_results: list[FormResult]) -> list[Match]:
         """
@@ -28,19 +31,18 @@ class MatchEngine:
     def _build_interest_graph(
         self, form_results: list[FormResult]
     ) -> dict[str, set[str]]:
-        """
-        Construye un grafo dirigido: { voter_name: {candidate_name, ...} }
-        Solo incluye aristas donde interested == True.
-        """
         graph: dict[str, set[str]] = {}
 
         for form in form_results:
-            voter_name = form.owner.name
+            # NORMALIZAMOS el nombre del dueño de la planilla
+            voter_name = self.normalizer.normalize(form.owner.name)
             interested_in: set[str] = set()
 
             for interaction in form.interactions:
                 if interaction.interested:
-                    interested_in.add(interaction.receptor_name)
+                    # NORMALIZAMOS el nombre de la persona votada
+                    target_name = self.normalizer.normalize(interaction.receptor_name)
+                    interested_in.add(target_name)
 
             if interested_in:
                 graph[voter_name] = interested_in
@@ -81,10 +83,11 @@ class MatchEngine:
 
     @staticmethod
     def _index_participants(
-        form_results: list[FormResult],
+        self, form_results: list[FormResult],
     ) -> dict[str, Participant]:
-        """Crea un índice name -> Participant para lookup O(1)."""
         index: dict[str, Participant] = {}
         for form in form_results:
-            index[form.owner.name] = form.owner
+            # Usamos el traductor para que la llave sea "limpia"
+            clean_name = self.normalizer.normalize(form.owner.name)
+            index[clean_name] = form.owner
         return index

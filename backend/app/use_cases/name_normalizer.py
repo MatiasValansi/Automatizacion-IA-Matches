@@ -7,7 +7,7 @@ class NameNormalizer:
     Aplica el principio de Responsabilidad Única (SRP).
     """
 
-    def __init__(self, threshold: int = 75):
+    def __init__(self, threshold: int = 80):
         #threshold es el porcentaje mínimo de similitud para considerar dos nombres como iguales
         self.threshold = threshold
 
