@@ -2,7 +2,7 @@ from fastapi import FastAPI
 
 # Creamos la instancia de FastAPI que busca Uvicorn
 app = FastAPI(
-    title="AI Social Matcher API",
+    title="Automatizacion IA Matches",
     description="Backend para la automatización de matches mediante IA",
     version="1.0.0"
 )
