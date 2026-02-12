@@ -23,6 +23,13 @@ class NameNormalizer:
         similarity = fuzz.ratio(n1, n2)
         
         return similarity >= self.threshold
+    
+    def normalize(self, text: str) -> str:
+        """Método público que el MatchEngine usará para limpiar llaves."""
+        if not text:
+            return ""
+        # Reutilizamos tu lógica de limpieza
+        return self._clean_string(text)
 
     def _clean_string(self, text: str) -> str:
         """Normaliza tildes, quita espacios y pasa a minúsculas."""

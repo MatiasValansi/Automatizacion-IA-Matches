@@ -6,10 +6,17 @@ Sigue el ciclo RED -> GREEN -> REFACTOR.
 from pytest_bdd import scenarios, given, when, then, parsers
 from app.core.entities import FormResult, Interaction, Participant, Match
 from app.use_cases.match_engine import MatchEngine
+from app.use_cases.name_normalizer import NameNormalizer
+import pytest
 
 # Vincula todos los escenarios del .feature
 scenarios("../features/matches.feature")
 
+@pytest.fixture
+def engine():
+    # Creamos el normalizador y se lo inyectamos al motor
+    normalizer = NameNormalizer(threshold=85)
+    return MatchEngine(normalizer=normalizer)
 
 # ── Fixtures compartidos ─────────────────────────────────────────────
 
@@ -34,8 +41,6 @@ class MatchContext:
         self.form_results.append(new_form)
         return new_form
 
-
-import pytest
 
 
 @pytest.fixture
@@ -69,9 +74,9 @@ def voter_voted_for_candidate(
 # ── WHEN ──────────────────────────────────────────────────────────────
 
 @when("el motor de cruce procesa las respuestas", target_fixture="context")
-def engine_processes_responses(context: MatchContext) -> MatchContext:
-    """Ejecuta el caso de uso puro de detección de matches."""
-    engine = MatchEngine()
+def engine_processes_responses(context: MatchContext, engine: MatchEngine) -> MatchContext:
+    """Ejecuta el caso de uso puro de detección de matches usando el motor inyectado."""
+    # Ahora usamos el engine que ya viene con el normalizador configurado
     context.matches = engine.find_matches(context.form_results)
     return context
 
@@ -102,3 +107,12 @@ def no_match_identified(context: MatchContext) -> None:
     Esto confirma que el motor filtró correctamente la falta de reciprocidad.
     """
     assert len(context.matches) == 0, f"Se encontraron {len(context.matches)} matches inesperados."
+    
+@then('se debe identificar un match entre "Matías" y "Sofía"')
+def verificar_match_con_tildes(context: MatchContext) -> None:
+    assert len(context.matches) == 1
+    # Verificamos que, a pesar de las tildes, el motor los unió
+    match = context.matches[0]
+    nombres = [match.person_a.name, match.person_b.name]
+    assert "Matías" in nombres or "Matias" in nombres
+    assert "Sofía" in nombres or "Sofia" in nombres    

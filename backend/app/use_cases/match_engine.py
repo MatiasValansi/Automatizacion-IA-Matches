@@ -81,7 +81,6 @@ class MatchEngine:
 
         return matches
 
-    @staticmethod
     def _index_participants(
         self, form_results: list[FormResult],
     ) -> dict[str, Participant]:
