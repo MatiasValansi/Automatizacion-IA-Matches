@@ -1,0 +1,14 @@
+services:
+  backend:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile
+    ports:
+      - "8000:8000"
+    volumes:
+      - ./backend:/app # Esto permite que los cambios que hagas en el código se vean en tiempo real
+    environment:
+      - PYTHONUNBUFFERED=1
+      # Aquí Irá la API_KEY de Gemini en el futuro
+    stdin_open: true
+    tty: true

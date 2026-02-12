@@ -8,9 +8,19 @@ from app.core.entities import FormResult, Interaction, Participant, Match
 from app.use_cases.match_engine import MatchEngine
 from app.use_cases.name_normalizer import NameNormalizer
 import pytest
+import os
+from pathlib import Path
 
-# Vincula todos los escenarios del .feature
-scenarios("../features/matches.feature")
+# ... (tus otros imports)
+
+# Calculamos la ruta absoluta al archivo .feature relativa a este archivo de test
+BASE_DIR = Path(__file__).resolve().parent
+FEATURE_FILE = BASE_DIR / ".." / "features" / "matches.feature"
+
+# Vincula los escenarios usando la ruta calculada
+scenarios(FEATURE_FILE)
+
+
 
 @pytest.fixture
 def engine():
