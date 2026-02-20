@@ -12,3 +12,5 @@ services:
       # Aquí Irá la API_KEY de Gemini en el futuro
     stdin_open: true
     tty: true
+    env_file:
+      - ./backend/.env

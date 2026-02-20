@@ -6,10 +6,14 @@ from abc import ABC, abstractmethod
 from .entities import FormResult
 
 class AIProvider(ABC):
-    @abstractmethod
+    @abstractmethod    
     def extract_from_image(self, image_bytes: bytes) -> FormResult:
-        pass
-
+        """
+        Contrato (Interfaz) para cualquier proveedor de IA.
+        Sigue el Principio de Inversión de Dependencias (D en SOLID).
+        """
+        pass    
+    
 class MatchRepository(ABC):
     @abstractmethod
     def save_matches(self, matches: list):

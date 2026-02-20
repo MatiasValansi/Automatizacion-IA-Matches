@@ -34,6 +34,8 @@ backend/
 │   └── unit/           # Tests de comportamiento y unidad
 └── Dockerfile          # Receta de construcción de la imagen
 
+---
+
 ## Instalación y Ejecución
 
 El proyecto está completamente **dockerizado** para garantizar la portabilidad y evitar conflictos de dependencias locales entre entornos de desarrollo.

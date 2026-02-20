@@ -11,7 +11,7 @@ def test_debe_identificar_nombres_similares_como_iguales():
     assert normalizer.are_similar("Matías", "Matias") is True
     
     # Caso 2: Diferencia de mayúsculas
-    assert normalizer.are_similar("JUAN", "juan") is True
+    assert normalizer.are_similar("JUAN M", "juan") is True
     
     # Caso 3: Error tipográfico leve
     assert normalizer.are_similar("Sofia", "Sofua") is True
