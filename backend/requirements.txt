@@ -1,8 +1,7 @@
 fastapi
 uvicorn
 pydantic
-langchain
-langchain-google-genai
+google-genai
 thefuzz
 pytest
 pytest-bdd
@@ -10,3 +9,5 @@ httpx
 python-dotenv
 thefuzz
 python-Levenshtein
+python-multipart
+requests

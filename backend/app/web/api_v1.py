@@ -1,6 +1,5 @@
 import os
-from fastapi import FastAPI, UploadFile, File, Form, HTTPException
-from typing import List
+from fastapi import FastAPI, HTTPException, Request
 
 # Importamos la lógica de negocio y los adaptadores
 from app.use_cases.process_event import ProcessEventUseCase
@@ -40,15 +39,47 @@ def read_root():
         "version": "1.1.0"
     }
 
-@app.post("/process-event")
-async def handle_process_event(
-    event_name: str = Form(...), 
-    files: List[UploadFile] = File(...)
-):
+@app.post(
+    "/process-event",
+    openapi_extra={
+        "requestBody": {
+            "content": {
+                "multipart/form-data": {
+                    "schema": {
+                        "type": "object",
+                        "required": ["event_name", "files"],
+                        "properties": {
+                            "event_name": {
+                                "type": "string",
+                                "description": "Nombre del evento (ej: '12/02/2026 26-34')"
+                            },
+                            "files": {
+                                "type": "array",
+                                "items": {
+                                    "type": "string",
+                                    "format": "binary"
+                                },
+                                "description": "Una o más imágenes de planillas"
+                            }
+                        }
+                    }
+                }
+            },
+            "required": True
+        }
+    }
+)
+async def handle_process_event(request: Request):
     """
     Endpoint principal para la UI de Eventeando.
     Recibe el nombre del evento (ej: '12/02/2026 26-34') y las fotos de las planillas.
     """
+    form = await request.form()
+    event_name = form.get("event_name")
+    files = form.getlist("files")
+
+    if not event_name:
+        raise HTTPException(status_code=400, detail="El campo 'event_name' es requerido.")
     if not files:
         raise HTTPException(status_code=400, detail="Debe cargar al menos una imagen.")
 

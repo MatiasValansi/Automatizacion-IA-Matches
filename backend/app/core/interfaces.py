@@ -3,6 +3,7 @@ Aplicamos Inversión de Dependencias (D). Definimos qué necesitamos, no cómo s
 """
 
 from abc import ABC, abstractmethod
+from .entities import Match
 from .entities import FormResult
 
 class AIProvider(ABC):
