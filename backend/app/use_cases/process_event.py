@@ -13,23 +13,15 @@ class ProcessEventUseCase:
         self.ai_provider = ai_provider
         self.match_engine = match_engine
 
-    def execute(self, images: list[bytes]) -> list[Match]:
-        """
-        Flujo de ejecución:
-        1. Recibe una lista de imágenes (fotos de las planillas).
-        2. Usa la IA para extraer la información de cada una.
-        3. Pasa los resultados al motor para encontrar los matches.
-        """
-        all_results = []
+    def execute(self, event_name: str, images: list[bytes]) -> list[Match]:
+        # 1. IA extrae datos
+        all_results = [self.ai_provider.extract_from_image(img) for img in images]
 
-        # 1. Fase de Extracción (Infrastructure -> Core)
-        for image_bytes in images:
-            # Gemini procesa la imagen y nos devuelve un FormResult
-            form_result = self.ai_provider.extract_from_image(image_bytes)
-            all_results.append(form_result)
-
-        # 2. Fase de Cruce (Pure Domain Logic)
-        # El motor ya tiene inyectado el Normalizer, así que los nombres se limpian solos
+        # 2. Motor encuentra matches
         matches = self.match_engine.find_matches(all_results)
+
+        # 3. Guardamos usando el nombre del evento como identificador
+        if matches:
+            self.repository.save_matches(event_name, matches)
 
         return matches

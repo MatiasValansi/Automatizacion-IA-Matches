@@ -16,5 +16,9 @@ class AIProvider(ABC):
     
 class MatchRepository(ABC):
     @abstractmethod
-    def save_matches(self, matches: list):
+    def save_matches(self, event_name: str, matches: list[Match]) -> bool:
+        """
+        Ahora recibe el event_name para identificar o crear 
+        el recurso en Google Sheets.
+        """
         pass
