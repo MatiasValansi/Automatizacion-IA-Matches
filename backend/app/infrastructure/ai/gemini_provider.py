@@ -9,10 +9,10 @@ from app.core.entities import FormResult, Interaction, Participant
 # google-genai SDK oficial → usa v1beta por defecto (soporta todos los modelos)
 # Modelos verificados disponibles en esta API key (sin gemini-1.5, fue removido)
 # Cuotas free tier: 15 req/min por modelo
-_MODEL_FALLBACK = [
+_MODEL_FALLBACK = [    
+    "gemini-2.5-flash",
     "gemini-2.0-flash",
     "gemini-2.0-flash-lite",
-    "gemini-2.5-flash",
     "gemini-2.0-flash-001",
 ]
 
