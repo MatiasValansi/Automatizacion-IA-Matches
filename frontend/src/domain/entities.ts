@@ -16,9 +16,11 @@ export interface Match {
 }
 
 export interface ProcessEventResult {
-  readonly eventName: string;
-  readonly matchCount: number;
-  readonly matches: Match[];
+  readonly event_name: string;
+  readonly processed_images: number;
+  readonly match_count: number;
+  readonly sheet_url: string | null;
+  readonly status: string;
 }
 
 /** Upload status finite state machine */

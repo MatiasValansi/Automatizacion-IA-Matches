@@ -21,11 +21,12 @@ class ProcessEventUseCase:
         self.match_engine = match_engine
         self.repository = repository
 
-    def execute(self, event_name: str, images: list[bytes]) -> list[Match]:
+    def execute(self, event_name: str, images: list[bytes]) -> dict:
         """
         1. Extrae datos de las imágenes con Gemini.
         2. Procesa matches con el motor (incluye normalización).
         3. Persiste los resultados en la hoja de Google correspondiente.
+        Retorna un dict con toda la info relevante para el frontend.
         """
         # Fase de extracción
         all_results = [self.ai_provider.extract_from_image(img) for img in images]
@@ -34,6 +35,10 @@ class ProcessEventUseCase:
         matches = self.match_engine.find_matches(all_results)
 
         # Fase de persistencia: siempre guarda data cruda + matches (aunque no haya matches mutuos)
-        self.repository.save_matches(event_name, all_results, matches)
+        sheet_url = self.repository.save_matches(event_name, all_results, matches)
 
-        return matches
+        return {
+            "matches": matches,
+            "sheet_url": sheet_url,
+            "images_processed": len(images),
+        }

@@ -22,9 +22,10 @@ class MatchRepository(ABC):
         event_name: str,
         form_results: list[FormResult],
         matches: list[Match],
-    ) -> bool:
+    ) -> str | None:
         """
         Envía tanto la data cruda (form_results) como los matches mutuos
         al repositorio, para persistirlos en pestañas separadas.
+        Retorna la URL de la hoja creada, o None si falla.
         """
         pass

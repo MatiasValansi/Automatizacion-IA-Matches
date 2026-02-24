@@ -13,10 +13,10 @@ class GoogleSheetsMatchRepository(MatchRepository):
         event_name: str,
         form_results: list,
         matches: list[Match],
-    ) -> bool:
+    ) -> str | None:
         if not self.webhook_url:
             print("⚠️ Error: No se encontró la URL del Webhook de Google.")
-            return False
+            return None
 
         # Data cruda: una fila por cada voto individual de cada planilla
         raw_data = []
@@ -41,7 +41,10 @@ class GoogleSheetsMatchRepository(MatchRepository):
         try:
             response = requests.post(self.webhook_url, json=payload, timeout=15)
             print(f"[GoogleSheets] Webhook: {response.status_code} - {response.text[:200]}")
-            return response.status_code == 200
+            if response.status_code == 200:
+                data = response.json()
+                return data.get("sheet", None)
+            return None
         except Exception as e:
             print(f"❌ Error al conectar con Google Sheets: {e}")
-            return False
+            return None

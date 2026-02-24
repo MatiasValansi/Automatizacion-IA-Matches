@@ -20,7 +20,11 @@ app = FastAPI(
 
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["http://localhost:5173"], # El puerto de tu frontend
+    allow_origins=[
+        "http://localhost:5173",
+        "http://localhost:5174",
+        "http://localhost:5175",
+    ],
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
@@ -103,13 +107,14 @@ async def handle_process_event(request: Request):
             images_bytes.append(content)
 
         # Ejecutamos el flujo completo del evento
-        matches = use_case.execute(event_name, images_bytes)
+        result = use_case.execute(event_name, images_bytes)
 
         return {
-            "event": event_name,
-            "processed_images": len(files),
-            "matches_found": len(matches),
-            "status": "Exportado exitosamente a Google Sheets"
+            "event_name": event_name,
+            "processed_images": result["images_processed"],
+            "match_count": len(result["matches"]),
+            "sheet_url": result["sheet_url"],
+            "status": "success",
         }
     except Exception as e:
         # Aquí podrías loggear el error para debugging
