@@ -33,8 +33,7 @@ class ProcessEventUseCase:
         # Fase de cruce
         matches = self.match_engine.find_matches(all_results)
 
-        # Fase de persistencia dinámica
-        if matches:
-            self.repository.save_matches(event_name, matches)
+        # Fase de persistencia: siempre guarda data cruda + matches (aunque no haya matches mutuos)
+        self.repository.save_matches(event_name, all_results, matches)
 
         return matches

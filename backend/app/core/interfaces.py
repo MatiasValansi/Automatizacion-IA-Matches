@@ -17,9 +17,14 @@ class AIProvider(ABC):
     
 class MatchRepository(ABC):
     @abstractmethod
-    def save_matches(self, event_name: str, matches: list[Match]) -> bool:
+    def save_matches(
+        self,
+        event_name: str,
+        form_results: list[FormResult],
+        matches: list[Match],
+    ) -> bool:
         """
-        Ahora recibe el event_name para identificar o crear 
-        el recurso en Google Sheets.
+        Envía tanto la data cruda (form_results) como los matches mutuos
+        al repositorio, para persistirlos en pestañas separadas.
         """
         pass
