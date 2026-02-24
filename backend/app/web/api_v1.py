@@ -1,5 +1,8 @@
 import os
+from dotenv import load_dotenv
 from fastapi import FastAPI, HTTPException, Request
+
+load_dotenv()  # Carga las variables del archivo .env
 
 # Importamos la lógica de negocio y los adaptadores
 from app.use_cases.process_event import ProcessEventUseCase
@@ -7,11 +10,20 @@ from app.use_cases.match_engine import MatchEngine
 from app.use_cases.name_normalizer import NameNormalizer
 from app.infrastructure.ai.gemini_provider import GeminiAIProvider
 from app.infrastructure.repositories.google_sheets_repository import GoogleSheetsMatchRepository
+from fastapi.middleware.cors import CORSMiddleware
 
 app = FastAPI(
     title="Automatizacion IA Matches",
     description="Backend para el procesamiento de planillas de eventos con IA",
     version="1.1.0"
+)
+
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=["http://localhost:5173"], # El puerto de tu frontend
+    allow_credentials=True,
+    allow_methods=["*"],
+    allow_headers=["*"],
 )
 
 # --- Inicialización de Dependencias (Manual por ahora) ---
