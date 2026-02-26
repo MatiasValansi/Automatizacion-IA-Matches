@@ -48,7 +48,7 @@ export function EventUploader({ useCase }: EventUploaderProps) {
           <input
             id="eventName"
             type="text"
-            placeholder="Networking Tech 2026"
+            placeholder="Tinder Night DD-MM 24-35"
             value={eventName}
             onChange={(e) => setEventName(e.target.value)}
             disabled={isLoading}
