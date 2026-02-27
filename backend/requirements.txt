@@ -11,3 +11,4 @@ thefuzz
 python-Levenshtein
 python-multipart
 requests
+Pillow>=10.0.0

@@ -72,23 +72,12 @@ class GeminiAIProvider(AIProvider):
         )
 
     def _get_system_prompt(self) -> str:
-        return """
-        Actúa como un experto en OCR y extracción de datos. 
-        Analiza la planilla de Speed Dating adjunta.
-        
-        Extrae:
-        1. El nombre de la persona dueña de la planilla.
-        2. La lista de personas con las que habló y si marcó 'Sí' o 'No'.
-
-        Devuelve ÚNICAMENTE un JSON con esta estructura exacta:
-        {
-            "owner_name": "Nombre del dueño",
-            "votes": [
-                {"target_name": "Nombre", "is_interested": true},
-                {"target_name": "Nombre", "is_interested": false}
-            ]
-        }
-        """
+        return (
+            'Extraé de esta planilla de Speed Dating el dueño y sus votos. '
+            'Respondé SOLO JSON: {"owner_name":"str","votes":[{"target_name":"str","is_interested":bool}]}. '
+            'Reglas: incluí todos los nombres visibles; Sí/✓/marca=true, No/✗/vacío=false; '
+            'nombres exactos como aparecen en la planilla.'
+        )
 
     def _map_to_entity(self, raw_content: str) -> FormResult:
         """Convierte el texto JSON de la IA en una entidad FormResult."""
