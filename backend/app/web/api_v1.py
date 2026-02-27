@@ -8,6 +8,7 @@ load_dotenv()  # Carga las variables del archivo .env
 from app.use_cases.process_event import ProcessEventUseCase
 from app.use_cases.match_engine import MatchEngine
 from app.use_cases.name_normalizer import NameNormalizer
+from app.use_cases.duplicate_detector import DuplicateDetector
 from app.infrastructure.ai.gemini_provider import GeminiAIProvider
 from app.infrastructure.repositories.google_sheets_repository import GoogleSheetsMatchRepository
 from fastapi.middleware.cors import CORSMiddleware
@@ -34,6 +35,7 @@ app.add_middleware(
 # En un futuro podrías usar un contenedor de DI como FastAPI Depends
 normalizer = NameNormalizer(threshold=85)
 engine = MatchEngine(normalizer=normalizer)
+duplicate_detector = DuplicateDetector(normalizer=normalizer)
 ai_provider = GeminiAIProvider()
 # La URL del webhook debe estar en tu archivo .env
 repository = GoogleSheetsMatchRepository(
@@ -44,7 +46,8 @@ repository = GoogleSheetsMatchRepository(
 use_case = ProcessEventUseCase(
     ai_provider=ai_provider,
     match_engine=engine,
-    repository=repository
+    repository=repository,
+    duplicate_detector=duplicate_detector,
 )
 
 @app.get("/")

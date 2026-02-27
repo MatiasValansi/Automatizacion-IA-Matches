@@ -20,3 +20,12 @@ class FormResult:
 class Match:
     person_a: Participant
     person_b: Participant
+
+@dataclass
+class DuplicateMerge:
+    """Representa la decisión de unificar dos nombres detectados como duplicados."""
+    name_a: str
+    name_b: str
+    canonical_name: str
+    similarity_score: int
+    decision: str

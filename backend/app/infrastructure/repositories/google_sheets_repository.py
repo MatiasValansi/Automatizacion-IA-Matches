@@ -1,7 +1,10 @@
+from __future__ import annotations
+
 import requests
 import os
 from app.core.interfaces import MatchRepository
-from app.core.entities import Match
+from app.core.entities import DuplicateMerge, Match
+
 
 class GoogleSheetsMatchRepository(MatchRepository):
     def __init__(self, webhook_url: str = None):
@@ -13,6 +16,7 @@ class GoogleSheetsMatchRepository(MatchRepository):
         event_name: str,
         form_results: list,
         matches: list[Match],
+        duplicate_merges: list[DuplicateMerge] | None = None,
     ) -> str | None:
         if not self.webhook_url:
             print("⚠️ Error: No se encontró la URL del Webhook de Google.")
@@ -28,7 +32,7 @@ class GoogleSheetsMatchRepository(MatchRepository):
                     "interested": interaction.interested,
                 })
 
-        # Payload con dos secciones: data cruda + matches mutuos
+        # Payload con tres secciones: data cruda + matches mutuos + duplicados
         payload = {
             "sheet_name": event_name,
             "raw_data": raw_data,
@@ -36,6 +40,7 @@ class GoogleSheetsMatchRepository(MatchRepository):
                 {"persona_a": m.person_a.name, "persona_b": m.person_b.name}
                 for m in matches
             ],
+            "duplicates": self._format_duplicates(duplicate_merges or []),
         }
 
         try:
@@ -48,3 +53,17 @@ class GoogleSheetsMatchRepository(MatchRepository):
         except Exception as e:
             print(f"❌ Error al conectar con Google Sheets: {e}")
             return None
+
+    @staticmethod
+    def _format_duplicates(merges: list[DuplicateMerge]) -> list[dict]:
+        """Formatea las decisiones de deduplicación para el payload del webhook."""
+        return [
+            {
+                "nombre_a": m.name_a,
+                "nombre_b": m.name_b,
+                "nombre_canonico": m.canonical_name,
+                "similitud_porcentaje": m.similarity_score,
+                "decision": m.decision,
+            }
+            for m in merges
+        ]

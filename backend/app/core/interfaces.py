@@ -2,9 +2,11 @@
 Aplicamos Inversión de Dependencias (D). Definimos qué necesitamos, no cómo se hace.
 """
 
+from __future__ import annotations
+
 from abc import ABC, abstractmethod
-from .entities import Match
-from .entities import FormResult
+from .entities import DuplicateMerge, Match, FormResult
+
 
 class AIProvider(ABC):
     @abstractmethod    
@@ -22,10 +24,12 @@ class MatchRepository(ABC):
         event_name: str,
         form_results: list[FormResult],
         matches: list[Match],
+        duplicate_merges: list[DuplicateMerge] | None = None,
     ) -> str | None:
         """
-        Envía tanto la data cruda (form_results) como los matches mutuos
-        al repositorio, para persistirlos en pestañas separadas.
+        Envía la data cruda (form_results), los matches mutuos y
+        las decisiones de deduplicación al repositorio,
+        para persistirlos en pestañas separadas.
         Retorna la URL de la hoja creada, o None si falla.
         """
         pass
