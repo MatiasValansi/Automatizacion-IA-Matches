@@ -112,13 +112,24 @@ async def handle_process_event(request: Request):
         # Ejecutamos el flujo completo del evento
         result = use_case.execute(event_name, images_bytes)
 
-        return {
+        response = {
             "event_name": event_name,
             "processed_images": result["images_processed"],
             "match_count": len(result["matches"]),
             "sheet_url": result["sheet_url"],
-            "status": "success",
+            "status": "success" if result["images_failed"] == 0 else "partial",
         }
+
+        # Agregar info de fallos solo si hubo imágenes que no se pudieron procesar
+        if result["images_failed"] > 0:
+            response["images_failed"] = result["images_failed"]
+            response["failed_indices"] = result["failed_indices"]
+            response["warning"] = (
+                f"{result['images_failed']} imagen(es) no pudieron ser procesadas. "
+                f"Se procesaron {result['images_processed']} exitosamente."
+            )
+
+        return response
     except Exception as e:
         # Aquí podrías loggear el error para debugging
         raise HTTPException(status_code=500, detail=f"Error procesando el evento: {str(e)}")

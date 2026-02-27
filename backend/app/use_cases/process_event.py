@@ -42,6 +42,8 @@ class ProcessEventUseCase:
         Retorna un dict con toda la info relevante para el frontend.
         """
         all_results = []
+        failed_images = []  # índices (1-based) de imágenes que fallaron
+
         for idx, img_bytes in enumerate(images):
             img_b64 = base64.b64encode(img_bytes).decode()
 
@@ -55,12 +57,33 @@ class ProcessEventUseCase:
             optimized_b64 = ImageOptimizer.optimize_base64(img_b64)
             optimized_bytes = base64.b64decode(optimized_b64)
 
-            # 3. Extraer datos con IA
-            result = self.ai_provider.extract_from_image(optimized_bytes)
+            # 3. Extraer datos con IA (con tolerancia a fallos)
+            try:
+                result = self.ai_provider.extract_from_image(optimized_bytes)
+            except Exception as e:
+                logger.error(
+                    f"[ProcessEvent] Imagen {idx + 1}/{len(images)} falló: {e}"
+                )
+                failed_images.append(idx + 1)
+                continue
 
             # 4. Guardar en cache
             image_cache.set(img_b64, result)
             all_results.append(result)
+
+        # Si no se pudo procesar ninguna imagen, lanzar error
+        if not all_results:
+            raise RuntimeError(
+                f"No se pudo procesar ninguna imagen. "
+                f"Fallaron: {len(failed_images)}/{len(images)}"
+            )
+
+        if failed_images:
+            logger.warning(
+                f"[ProcessEvent] {len(failed_images)} imagen(es) fallaron "
+                f"(#{', #'.join(str(i) for i in failed_images)}). "
+                f"Procesadas exitosamente: {len(all_results)}/{len(images)}"
+            )
 
         # Fase de deduplicación: detectar nombres similares y unificarlos
         unified_results, duplicate_merges = self.duplicate_detector.detect_and_unify(
@@ -78,6 +101,8 @@ class ProcessEventUseCase:
         return {
             "matches": matches,
             "sheet_url": sheet_url,
-            "images_processed": len(images),
+            "images_processed": len(all_results),
+            "images_failed": len(failed_images),
+            "failed_indices": failed_images,
             "duplicates_detected": len(duplicate_merges),
         }

@@ -1,10 +1,13 @@
 import os
 import json
 import time
+import logging
 from google import genai
 from google.genai import types
 from app.core.interfaces import AIProvider
 from app.core.entities import FormResult, Interaction, Participant
+
+logger = logging.getLogger(__name__)
 
 # google-genai SDK oficial → usa v1beta por defecto (soporta todos los modelos)
 # Modelos verificados disponibles en esta API key (sin gemini-1.5, fue removido)
@@ -15,6 +18,9 @@ _MODEL_FALLBACK = [
     "gemini-2.0-flash-lite",
     "gemini-2.0-flash-001",
 ]
+
+# Throttling: mínimo segundos entre requests para no saturar la cuota (15 req/min)
+_MIN_REQUEST_INTERVAL = 4.5
 
 class GeminiAIProvider(AIProvider):
     """
@@ -27,11 +33,22 @@ class GeminiAIProvider(AIProvider):
         self._client = genai.Client(
             api_key=os.getenv("GOOGLE_API_KEY"),
         )
+        self._last_request_time: float = 0
+
+    def _throttle(self) -> None:
+        """Espera lo necesario para respetar el intervalo mínimo entre requests."""
+        now = time.time()
+        elapsed = now - self._last_request_time
+        if elapsed < _MIN_REQUEST_INTERVAL:
+            wait = _MIN_REQUEST_INTERVAL - elapsed
+            logger.info(f"[GeminiAIProvider] Throttling: esperando {wait:.1f}s antes de la próxima request")
+            time.sleep(wait)
+        self._last_request_time = time.time()
 
     def extract_from_image(self, image_bytes: bytes) -> FormResult:
         """
         Toma los bytes de una imagen, los envía a Gemini y devuelve un FormResult.
-        Reintenta con modelos alternativos si hay error de cuota (429).
+        Aplica throttling automático y reintenta con modelos alternativos ante 429/404.
         """
         contents = [
             types.Part.from_text(text=self._get_system_prompt()),
@@ -42,29 +59,28 @@ class GeminiAIProvider(AIProvider):
         for model_name in _MODEL_FALLBACK:
             for attempt in range(3):
                 try:
+                    self._throttle()
                     response = self._client.models.generate_content(
                         model=model_name,
                         contents=contents,
                     )
-                    print(f"[GeminiAIProvider] Respuesta obtenida con '{model_name}'")
+                    logger.info(f"[GeminiAIProvider] Respuesta obtenida con '{model_name}'")
                     return self._map_to_entity(response.text)
                 except Exception as e:
                     error_str = str(e)
                     if "429" in error_str or "RESOURCE_EXHAUSTED" in error_str:
                         wait = (2 ** attempt) * 5  # 5s, 10s, 20s
-                        print(f"[GeminiAIProvider] Cuota agotada en '{model_name}' (intento {attempt + 1}), esperando {wait}s...")
+                        logger.warning(f"[GeminiAIProvider] Cuota agotada en '{model_name}' (intento {attempt + 1}), esperando {wait}s...")
                         time.sleep(wait)
                         last_error = e
                     elif "404" in error_str or "NOT_FOUND" in error_str:
-                        # Modelo no disponible en esta región/plan, pasar al siguiente
-                        print(f"[GeminiAIProvider] Modelo '{model_name}' no disponible (404), probando siguiente...")
+                        logger.warning(f"[GeminiAIProvider] Modelo '{model_name}' no disponible (404), probando siguiente...")
                         last_error = e
-                        break  # salir del loop de reintentos para este modelo
+                        break
                     else:
                         raise
             else:
-                # El bucle interno terminó sin break (agotó reintentos por cuota)
-                print(f"[GeminiAIProvider] Modelo '{model_name}' agotado, probando siguiente...")
+                logger.warning(f"[GeminiAIProvider] Modelo '{model_name}' agotado, probando siguiente...")
                 continue
 
         raise RuntimeError(
