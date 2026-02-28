@@ -41,7 +41,7 @@ class GeminiAIProvider(AIProvider):
         elapsed = now - self._last_request_time
         if elapsed < _MIN_REQUEST_INTERVAL:
             wait = _MIN_REQUEST_INTERVAL - elapsed
-            logger.info(f"[GeminiAIProvider] Throttling: esperando {wait:.1f}s antes de la próxima request")
+            print(f"[GeminiAIProvider] Throttling: esperando {wait:.1f}s antes de la próxima request")
             time.sleep(wait)
         self._last_request_time = time.time()
 
@@ -64,23 +64,23 @@ class GeminiAIProvider(AIProvider):
                         model=model_name,
                         contents=contents,
                     )
-                    logger.info(f"[GeminiAIProvider] Respuesta obtenida con '{model_name}'")
+                    print(f"[GeminiAIProvider] ✅ Respuesta obtenida con '{model_name}'")
                     return self._map_to_entity(response.text)
                 except Exception as e:
                     error_str = str(e)
                     if "429" in error_str or "RESOURCE_EXHAUSTED" in error_str:
                         wait = (2 ** attempt) * 5  # 5s, 10s, 20s
-                        logger.warning(f"[GeminiAIProvider] Cuota agotada en '{model_name}' (intento {attempt + 1}), esperando {wait}s...")
+                        print(f"[GeminiAIProvider] ⚠️ Cuota agotada en '{model_name}' (intento {attempt + 1}), esperando {wait}s...")
                         time.sleep(wait)
                         last_error = e
                     elif "404" in error_str or "NOT_FOUND" in error_str:
-                        logger.warning(f"[GeminiAIProvider] Modelo '{model_name}' no disponible (404), probando siguiente...")
+                        print(f"[GeminiAIProvider] ⚠️ Modelo '{model_name}' no disponible (404), probando siguiente...")
                         last_error = e
                         break
                     else:
                         raise
             else:
-                logger.warning(f"[GeminiAIProvider] Modelo '{model_name}' agotado, probando siguiente...")
+                print(f"[GeminiAIProvider] ⚠️ Modelo '{model_name}' agotado, probando siguiente...")
                 continue
 
         raise RuntimeError(

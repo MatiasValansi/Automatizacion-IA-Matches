@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import requests
+from requests.exceptions import ReadTimeout, ConnectionError
 import os
 from app.core.interfaces import MatchRepository
 from app.core.entities import DuplicateMerge, Match
@@ -44,14 +45,28 @@ class GoogleSheetsMatchRepository(MatchRepository):
         }
 
         try:
-            response = requests.post(self.webhook_url, json=payload, timeout=15)
-            print(f"[GoogleSheets] Webhook: {response.status_code} - {response.text[:200]}")
+            response = requests.post(
+                self.webhook_url, json=payload, timeout=(10, 60)
+            )
+            print(f"[GoogleSheets] ✅ Webhook: {response.status_code} - {response.text[:200]}")
             if response.status_code == 200:
                 data = response.json()
                 return data.get("sheet", None)
             return None
+        except ReadTimeout:
+            # El servidor recibió los datos pero tardó en responder.
+            # Google Apps Script suele procesar bien aunque haga timeout en la lectura.
+            print(
+                "[GoogleSheets] ⚠️ Timeout esperando respuesta de Google Sheets. "
+                "Los datos probablemente se guardaron correctamente. "
+                "Verificá la hoja de cálculo manualmente."
+            )
+            return None
+        except ConnectionError as e:
+            print(f"[GoogleSheets] ❌ Error de conexión con Google Sheets: {e}")
+            return None
         except Exception as e:
-            print(f"❌ Error al conectar con Google Sheets: {e}")
+            print(f"[GoogleSheets] ❌ Error inesperado al conectar con Google Sheets: {e}")
             return None
 
     @staticmethod
