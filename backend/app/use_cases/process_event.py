@@ -85,17 +85,25 @@ class ProcessEventUseCase:
                 f"Procesadas exitosamente: {len(all_results)}/{len(images)}"
             )
 
-        # Fase de deduplicación: detectar nombres similares y unificarlos
+        # ── FASE 1: Unificación de nombres ─────────────────────────
+        # Primero se analizan TODOS los nombres (owners + targets) y se
+        # unifican variantes/typos bajo un nombre canónico.
+        # Esto debe ocurrir ANTES de cualquier cálculo de votos o matches.
         unified_results, duplicate_merges = self.duplicate_detector.detect_and_unify(
             all_results
         )
 
-        # Fase de cruce (usa los nombres ya unificados)
+        # ── FASE 2: Detección de matches (sobre datos unificados) ─────
+        # El motor de cruce opera exclusivamente sobre los FormResults
+        # ya unificados, garantizando que los votos de cada persona
+        # se agrupan bajo su nombre canónico.
         matches = self.match_engine.find_matches(unified_results)
 
-        # Fase de persistencia: data cruda + matches + reporte de duplicados
+        # ── FASE 3: Persistencia (planilla + matches + duplicados) ────
+        # Se envían los datos UNIFICADOS al repositorio para que las
+        # planillas reflejen los nombres canónicos, no los originales.
         sheet_url = self.repository.save_matches(
-            event_name, all_results, matches, duplicate_merges
+            event_name, unified_results, matches, duplicate_merges
         )
 
         return {

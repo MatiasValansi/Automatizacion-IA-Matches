@@ -45,7 +45,11 @@ class MatchEngine:
                     interested_in.add(target_name)
 
             if interested_in:
-                graph[voter_name] = interested_in
+                # Mergeamos intereses si el owner ya existe (posible tras unificación)
+                if voter_name in graph:
+                    graph[voter_name] |= interested_in
+                else:
+                    graph[voter_name] = interested_in
 
         return graph
 
@@ -88,5 +92,7 @@ class MatchEngine:
         for form in form_results:
             # Usamos el traductor para que la llave sea "limpia"
             clean_name = self.normalizer.normalize(form.owner.name)
-            index[clean_name] = form.owner
+            # Conservamos la primera ocurrencia (nombre canónico post-dedup)
+            if clean_name not in index:
+                index[clean_name] = form.owner
         return index
