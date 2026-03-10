@@ -6,6 +6,7 @@ from app.core.interfaces import AIProvider, MatchRepository
 from app.use_cases.match_engine import MatchEngine
 from app.use_cases.duplicate_detector import DuplicateDetector
 from app.services.image_optimizer import ImageOptimizer
+from app.infrastructure.image_processor import ImageProcessor
 from app.services.result_cache import image_cache
 
 # Evitamos colisiones de importación circular para el tipado
@@ -55,8 +56,10 @@ class ProcessEventUseCase:
                 all_results.append(cached)
                 continue
 
-            # 2. Optimizar imagen antes de enviar a Gemini
-            optimized_b64 = ImageOptimizer.optimize_base64(img_b64)
+            # 2. Corregir perspectiva (deskew) y luego optimizar
+            deskewed_bytes = ImageProcessor.deskew(img_bytes)
+            deskewed_b64 = base64.b64encode(deskewed_bytes).decode()
+            optimized_b64 = ImageOptimizer.optimize_base64(deskewed_b64)
             optimized_bytes = base64.b64decode(optimized_b64)
             pending_bytes.append(optimized_bytes)
             pending_indices.append(idx)

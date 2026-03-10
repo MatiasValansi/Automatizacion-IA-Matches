@@ -10,6 +10,7 @@ class Participant:
 class Interaction:
     receptor_name: str
     interested: bool
+    confidence_score: float = 1.0
 
 @dataclass
 class FormResult:

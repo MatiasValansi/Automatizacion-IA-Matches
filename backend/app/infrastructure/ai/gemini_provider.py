@@ -51,6 +51,7 @@ class GeminiAIProvider(AIProvider):
     def _process_chunk(self, chunk: list[bytes]) -> list[FormResult]:
         """Envía un chunk (≤ 25 imágenes) en un solo request a Gemini."""
         contents: list[types.Part] = [
+            types.Part.from_text(text=self.build_system_prompt()),
             types.Part.from_text(text=self._get_batch_prompt(len(chunk))),
         ]
         for img_bytes in chunk:
@@ -109,6 +110,25 @@ class GeminiAIProvider(AIProvider):
 
     # ── Prompt ──────────────────────────────────────────────────
 
+    @staticmethod
+    def build_system_prompt() -> str:
+        """System prompt para la API de Gemini optimizado para planillas con paralaje."""
+        return (
+            "Sos un sistema experto de OCR para planillas de Speed Dating. "
+            "Tu tarea es extraer con precisión los datos de tablas manuscritas, "
+            "incluso cuando la imagen presenta inclinación o distorsión de perspectiva.\n\n"
+            "INSTRUCCIONES DE ANÁLISIS VISUAL:\n"
+            "1. Identificá las líneas horizontales de la tabla que separan cada fila de participantes.\n"
+            "2. Analiza la posición de las marcas (X o checks) basándote en la fila de texto "
+            "a su izquierda inmediata. Si detectas inclinación, prioriza la alineación visual "
+            "con las líneas de la planilla sobre las coordenadas absolutas.\n"
+            "3. Usá las líneas horizontales como guía para asociar cada marca con su fila correcta, "
+            "no te guíes por la posición vertical absoluta en píxeles.\n"
+            "4. Para cada fila extraída, evaluá qué tan legible y confiable es la lectura "
+            "y asigná un confidence_score entre 0.0 (ilegible/dudoso) y 1.0 (perfectamente claro).\n\n"
+            "FORMATO DE SALIDA: JSON estrictamente válido."
+        )
+
     def _get_batch_prompt(self, image_count: int) -> str:
         return (
             f"Recibís {image_count} imágenes de planillas de Speed Dating. "
@@ -116,10 +136,12 @@ class GeminiAIProvider(AIProvider):
             "Respondé SOLO un array JSON con exactamente un objeto por imagen, "
             "en el MISMO orden en que aparecen las imágenes:\n"
             '[{"owner_name": "str", '
-            '"votes": [{"target_name": "str", "is_interested": bool}]}]\n'
+            '"votes": [{"target_name": "str", "is_interested": bool, '
+            '"confidence_score": float}]}]\n'
             "Reglas: incluí todos los nombres visibles; "
             "Sí/✓/marca = true, No/✗/vacío = false; "
-            "nombres exactos como aparecen en la planilla."
+            "nombres exactos como aparecen en la planilla; "
+            "confidence_score de 0.0 a 1.0 para cada fila según legibilidad."
         )
 
     # ── Mapping ─────────────────────────────────────────────────
@@ -148,6 +170,7 @@ class GeminiAIProvider(AIProvider):
             Interaction(
                 receptor_name=v["target_name"],
                 interested=v["is_interested"],
+                confidence_score=v.get("confidence_score", 1.0),
             )
             for v in data["votes"]
         ]
