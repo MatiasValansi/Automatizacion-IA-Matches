@@ -4,18 +4,35 @@ Motor de Cruce de Matches.
 Responsabilidad Única (SRP): Detectar matches mutuos a partir de
 resultados de formularios ya procesados.
 
-No depende de infraestructura — es una función pura del dominio.
+Inversión de Dependencias (DIP): depende de la interfaz AuditRepository,
+no de la implementación concreta de Google Sheets.
 """
-from app.core.entities import FormResult, Match, Participant
-from app.use_cases.name_normalizer import NameNormalizer # Importamos el traductor
+from collections import defaultdict
+
+from app.core.entities import AuditRecord, FormResult, Interaction, Match, Participant
+from app.core.interfaces import AuditRepository
+from app.use_cases.name_normalizer import NameNormalizer
+
 
 class MatchEngine:    
     """Detecta matches mutuos entre participantes."""
 
-    def __init__(self, normalizer: NameNormalizer):
-        # Guardamos la instancia para usarla en los métodos internos
+    def __init__(self, normalizer: NameNormalizer, audit_repo: AuditRepository):
         self.normalizer = normalizer
+        self.audit_repo = audit_repo
 
+    # ── Flujo principal: lee de Auditoría IA ────────────────────
+    def find_matches_from_audit(self, event_name: str) -> list[Match]:
+        """
+        1. Lee los registros auditados (incluye correcciones humanas).
+        2. Reconstruye FormResults priorizando Corrección_Humana > IA.
+        3. Ejecuta el algoritmo de cruce sobre datos auditados.
+        """
+        audit_records = self.audit_repo.get_audited_results(event_name)
+        form_results = self._build_form_results_from_audit(audit_records)
+        return self.find_matches(form_results)
+
+    # ── Algoritmo puro (sin I/O) ───────────────────────────────
     def find_matches(self, form_results: list[FormResult]) -> list[Match]:
         """
         Algoritmo:
@@ -96,3 +113,40 @@ class MatchEngine:
             if clean_name not in index:
                 index[clean_name] = form.owner
         return index
+
+    # ── Conversión Auditoría → FormResult ───────────────────────
+    @staticmethod
+    def _resolve_interest(record: AuditRecord) -> bool:
+        """Prioriza Corrección_Humana sobre la decisión de la IA."""
+        if record.human_correction and record.human_correction.strip():
+            return record.human_correction.strip().upper() == "SI"
+        return record.interested
+
+    def _build_form_results_from_audit(
+        self, records: list[AuditRecord]
+    ) -> list[FormResult]:
+        """
+        Agrupa los AuditRecords por dueño de planilla y reconstruye
+        los FormResult con las interacciones ya corregidas.
+        """
+        groups: dict[str, list[AuditRecord]] = defaultdict(list)
+        for record in records:
+            groups[record.extracted_name].append(record)
+
+        form_results: list[FormResult] = []
+        for owner_name, owner_records in groups.items():
+            interactions = [
+                Interaction(
+                    receptor_name=r.voted_for,
+                    interested=self._resolve_interest(r),
+                    confidence_score=r.ai_confidence,
+                )
+                for r in owner_records
+            ]
+            form_results.append(
+                FormResult(
+                    owner=Participant(name=owner_name),
+                    interactions=interactions,
+                )
+            )
+        return form_results

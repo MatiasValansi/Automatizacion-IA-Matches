@@ -2,7 +2,8 @@ from __future__ import annotations
 import base64
 import logging
 from typing import TYPE_CHECKING
-from app.core.interfaces import AIProvider, MatchRepository
+from app.core.entities import AuditRecord
+from app.core.interfaces import AIProvider, AuditRepository, MatchRepository
 from app.use_cases.match_engine import MatchEngine
 from app.use_cases.duplicate_detector import DuplicateDetector
 from app.services.image_optimizer import ImageOptimizer
@@ -18,28 +19,39 @@ logger = logging.getLogger(__name__)
 class ProcessEventUseCase:
     """
     Orquestador del flujo de negocio. 
-    Coordina la IA, la deduplicación, el motor de matches y la persistencia en Sheets.
+    Coordina la IA, la deduplicación, la auditoría,
+    el motor de matches y la persistencia en Sheets.
     """
 
     def __init__(self, 
                  ai_provider: AIProvider, 
                  match_engine: MatchEngine, 
                  repository: MatchRepository,
+                 audit_repo: AuditRepository,
                  duplicate_detector: DuplicateDetector):
         self.ai_provider = ai_provider
         self.match_engine = match_engine
         self.repository = repository
+        self.audit_repo = audit_repo
         self.duplicate_detector = duplicate_detector
 
     def execute(self, event_name: str, images: list[bytes]) -> dict:
         """
-        1. Verifica cache para cada imagen.
-        2. Optimiza imágenes no cacheadas con ImageOptimizer.
-        3. Extrae datos de las imágenes con Gemini.
-        4. Cachea los resultados nuevos.
-        5. Detecta nombres duplicados y unifica variantes.
-        6. Procesa matches con el motor (incluye normalización).
-        7. Persiste los resultados en la hoja de Google correspondiente.
+        Flujo completo de procesamiento de un evento:
+
+        FASE 1 – Extracción y Auditoría
+          1. Verifica cache para cada imagen.
+          2. Optimiza imágenes no cacheadas con ImageOptimizer.
+          3. Extrae datos de las imágenes con Gemini.
+          4. Cachea los resultados nuevos.
+          5. Detecta nombres duplicados y unifica variantes.
+          6. Persiste los resultados en la hoja 'Auditoría IA'.
+
+        FASE 2 – Matches (post-auditoría)
+          7. Lee los datos auditados (con posibles correcciones humanas).
+          8. El motor de cruce calcula matches desde la auditoría.
+          9. Persiste los matches en la hoja 'Matches'.
+
         Retorna un dict con toda la info relevante para el frontend.
         """
         all_results = []
@@ -93,22 +105,20 @@ class ProcessEventUseCase:
             )
 
         # ── FASE 1: Unificación de nombres ─────────────────────────
-        # Primero se analizan TODOS los nombres (owners + targets) y se
-        # unifican variantes/typos bajo un nombre canónico.
-        # Esto debe ocurrir ANTES de cualquier cálculo de votos o matches.
         unified_results, duplicate_merges = self.duplicate_detector.detect_and_unify(
             all_results
         )
 
-        # ── FASE 2: Detección de matches (sobre datos unificados) ─────
-        # El motor de cruce opera exclusivamente sobre los FormResults
-        # ya unificados, garantizando que los votos de cada persona
-        # se agrupan bajo su nombre canónico.
-        matches = self.match_engine.find_matches(unified_results)
+        # ── FASE 1b: Persistir en Auditoría IA ─────────────────────
+        audit_records = self._form_results_to_audit_records(unified_results)
+        self.audit_repo.save_audit(event_name, audit_records)
 
-        # ── FASE 3: Persistencia (planilla + matches + duplicados) ────
-        # Se envían los datos UNIFICADOS al repositorio para que las
-        # planillas reflejen los nombres canónicos, no los originales.
+        # ── FASE 2: Matches desde datos auditados ──────────────────
+        # El motor lee de 'Auditoría IA', priorizando correcciones
+        # humanas sobre la extracción de la IA.
+        matches = self.match_engine.find_matches_from_audit(event_name)
+
+        # ── FASE 3: Persistencia de matches y data cruda ───────────
         sheet_url = self.repository.save_matches(
             event_name, unified_results, matches, duplicate_merges
         )
@@ -121,3 +131,21 @@ class ProcessEventUseCase:
             "failed_indices": failed_images,
             "duplicates_detected": len(duplicate_merges),
         }
+
+    @staticmethod
+    def _form_results_to_audit_records(
+        form_results: list,
+    ) -> list[AuditRecord]:
+        """Convierte FormResults unificados en registros de auditoría."""
+        records: list[AuditRecord] = []
+        for form in form_results:
+            for interaction in form.interactions:
+                records.append(
+                    AuditRecord(
+                        extracted_name=form.owner.name,
+                        voted_for=interaction.receptor_name,
+                        interested=interaction.interested,
+                        ai_confidence=interaction.confidence_score,
+                    )
+                )
+        return records

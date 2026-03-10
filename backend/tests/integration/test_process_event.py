@@ -4,7 +4,19 @@ from app.use_cases.process_event import ProcessEventUseCase
 from app.use_cases.match_engine import MatchEngine
 from app.use_cases.name_normalizer import NameNormalizer
 from app.use_cases.duplicate_detector import DuplicateDetector
-from app.core.entities import FormResult, Interaction, Participant
+from app.core.entities import AuditRecord, FormResult, Interaction, Participant
+
+
+def _make_in_memory_audit_repo():
+    """
+    Crea un mock de AuditRepository que almacena en memoria:
+    lo que se guarda con save_audit se devuelve en get_audited_results.
+    """
+    store: dict[str, list[AuditRecord]] = {}
+    mock = MagicMock()
+    mock.save_audit.side_effect = lambda name, records: store.__setitem__(name, records)
+    mock.get_audited_results.side_effect = lambda name: store.get(name, [])
+    return mock
 
 def test_flujo_completo_del_evento():
     # 1. Setup: Mocks y dependencias
@@ -27,7 +39,8 @@ def test_flujo_completo_del_evento():
     
     # Instanciamos el motor real con su normalizador
     normalizer = NameNormalizer()
-    engine = MatchEngine(normalizer=normalizer)
+    mock_audit_repo = _make_in_memory_audit_repo()
+    engine = MatchEngine(normalizer=normalizer, audit_repo=mock_audit_repo)
     duplicate_detector = DuplicateDetector(normalizer=normalizer)
     
     # Creamos el Orquestador con todas sus dependencias
@@ -35,6 +48,7 @@ def test_flujo_completo_del_evento():
         ai_provider=mock_ai,
         match_engine=engine,
         repository=mock_repo,
+        audit_repo=mock_audit_repo,
         duplicate_detector=duplicate_detector,
     )
 
@@ -104,12 +118,14 @@ def test_pipeline_unifica_nombres_antes_de_matches_y_planilla():
     mock_ai.extract_batch.return_value = [form_maria, form_tamara, form_hernan]
 
     normalizer = NameNormalizer(threshold=85)
-    engine = MatchEngine(normalizer=normalizer)
+    mock_audit_repo = _make_in_memory_audit_repo()
+    engine = MatchEngine(normalizer=normalizer, audit_repo=mock_audit_repo)
     duplicate_detector = DuplicateDetector(normalizer=normalizer)
     use_case = ProcessEventUseCase(
         ai_provider=mock_ai,
         match_engine=engine,
         repository=mock_repo,
+        audit_repo=mock_audit_repo,
         duplicate_detector=duplicate_detector,
     )
 

@@ -23,6 +23,16 @@ class Match:
     person_b: Participant
 
 @dataclass
+class AuditRecord:
+    """Una fila de la hoja 'Auditoría IA': un voto individual ya clasificado."""
+    extracted_name: str       # Nombre_Extraído (dueño de la planilla)
+    voted_for: str            # Votó_A (persona votada)
+    interested: bool          # Interés (SI/NO) según la IA
+    ai_confidence: float      # Confianza_IA (0.0 – 1.0)
+    human_correction: str = ""  # Corrección_Humana ("SI"/"NO" o vacío)
+
+
+@dataclass
 class DuplicateMerge:
     """Representa la decisión de unificar dos nombres detectados como duplicados."""
     name_a: str

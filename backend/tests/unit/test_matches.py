@@ -3,6 +3,7 @@ BDD Tests para el Motor de Cruce de Matches.
 Sigue el ciclo RED -> GREEN -> REFACTOR.
 """
 
+from unittest.mock import MagicMock
 from pytest_bdd import scenarios, given, when, then, parsers
 from app.core.entities import FormResult, Interaction, Participant, Match
 from app.use_cases.match_engine import MatchEngine
@@ -25,8 +26,9 @@ scenarios(FEATURE_FILE)
 @pytest.fixture
 def engine():
     # Creamos el normalizador y se lo inyectamos al motor
+    # audit_repo es un stub: estos tests solo usan find_matches (puro, sin I/O)
     normalizer = NameNormalizer(threshold=85)
-    return MatchEngine(normalizer=normalizer)
+    return MatchEngine(normalizer=normalizer, audit_repo=MagicMock())
 
 # ── Fixtures compartidos ─────────────────────────────────────────────
 

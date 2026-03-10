@@ -10,7 +10,10 @@ from app.use_cases.match_engine import MatchEngine
 from app.use_cases.name_normalizer import NameNormalizer
 from app.use_cases.duplicate_detector import DuplicateDetector
 from app.infrastructure.ai.gemini_provider import GeminiAIProvider
-from app.infrastructure.repositories.google_sheets_repository import GoogleSheetsMatchRepository
+from app.infrastructure.repositories.google_sheets_repository import (
+    GoogleSheetsMatchRepository,
+    GoogleSheetsAuditRepository,
+)
 from fastapi.middleware.cors import CORSMiddleware
 
 app = FastAPI(
@@ -33,20 +36,20 @@ app.add_middleware(
 
 # --- Inicialización de Dependencias (Manual por ahora) ---
 # En un futuro podrías usar un contenedor de DI como FastAPI Depends
+webhook_url = os.getenv("GOOGLE_SHEETS_WEBHOOK_URL", "")
 normalizer = NameNormalizer(threshold=85)
-engine = MatchEngine(normalizer=normalizer)
 duplicate_detector = DuplicateDetector(normalizer=normalizer)
 ai_provider = GeminiAIProvider()
-# La URL del webhook debe estar en tu archivo .env
-repository = GoogleSheetsMatchRepository(
-    webhook_url=os.getenv("GOOGLE_SHEETS_WEBHOOK_URL", "")
-)
+repository = GoogleSheetsMatchRepository(webhook_url=webhook_url)
+audit_repo = GoogleSheetsAuditRepository(webhook_url=webhook_url)
+engine = MatchEngine(normalizer=normalizer, audit_repo=audit_repo)
 
 # El "Director de Orquesta"
 use_case = ProcessEventUseCase(
     ai_provider=ai_provider,
     match_engine=engine,
     repository=repository,
+    audit_repo=audit_repo,
     duplicate_detector=duplicate_detector,
 )
 
