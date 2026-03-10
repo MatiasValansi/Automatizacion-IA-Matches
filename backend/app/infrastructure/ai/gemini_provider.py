@@ -119,13 +119,20 @@ class GeminiAIProvider(AIProvider):
             "incluso cuando la imagen presenta inclinación o distorsión de perspectiva.\n\n"
             "INSTRUCCIONES DE ANÁLISIS VISUAL:\n"
             "1. Identificá las líneas horizontales de la tabla que separan cada fila de participantes.\n"
-            "2. Analiza la posición de las marcas (X o checks) basándote en la fila de texto "
-            "a su izquierda inmediata. Si detectas inclinación, prioriza la alineación visual "
-            "con las líneas de la planilla sobre las coordenadas absolutas.\n"
-            "3. Usá las líneas horizontales como guía para asociar cada marca con su fila correcta, "
-            "no te guíes por la posición vertical absoluta en píxeles.\n"
-            "4. Para cada fila extraída, evaluá qué tan legible y confiable es la lectura "
-            "y asigná un confidence_score entre 0.0 (ilegible/dudoso) y 1.0 (perfectamente claro).\n\n"
+            "2. Cada marca (X, ✓, check o tachadura) debe asociarse ESTRICTAMENTE a la línea de texto "
+            "que está a su IZQUIERDA INMEDIATA en la MISMA fila horizontal de la tabla. "
+            "Nunca asignes una marca a una fila superior o inferior; seguí siempre la línea horizontal "
+            "de la grilla como referencia, no la posición vertical absoluta en píxeles.\n"
+            "3. Si detectás inclinación en la imagen, usá las líneas de la tabla como guía principal "
+            "para la asociación fila↔marca. La alineación con la grilla tiene prioridad absoluta "
+            "sobre las coordenadas de píxeles.\n"
+            "4. NOMBRES ILEGIBLES O EN BLANCO: Si el nombre de un participante en una fila es "
+            "ilegible, está borroso, tachado o el campo está vacío, NO lo ignores ni lo omitas. "
+            "Devolvé el texto exacto [NOMBRE ILEGIBLE] como valor de target_name u owner_name. "
+            "Nunca saltees una fila; toda fila visible de la tabla debe generar una entrada en la salida.\n"
+            "5. Para cada fila extraída, evaluá qué tan legible y confiable es la lectura "
+            "y asigná un confidence_score entre 0.0 (ilegible/dudoso) y 1.0 (perfectamente claro). "
+            "Las filas con [NOMBRE ILEGIBLE] deben tener confidence_score ≤ 0.3.\n\n"
             "FORMATO DE SALIDA: JSON estrictamente válido."
         )
 
@@ -138,10 +145,16 @@ class GeminiAIProvider(AIProvider):
             '[{"owner_name": "str", '
             '"votes": [{"target_name": "str", "is_interested": bool, '
             '"confidence_score": float}]}]\n'
-            "Reglas: incluí todos los nombres visibles; "
-            "Sí/✓/marca = true, No/✗/vacío = false; "
-            "nombres exactos como aparecen en la planilla; "
-            "confidence_score de 0.0 a 1.0 para cada fila según legibilidad."
+            "Reglas OBLIGATORIAS:\n"
+            "- Incluí TODAS las filas visibles de la tabla, sin excepción.\n"
+            "- Sí/✓/marca = true, No/✗/vacío = false.\n"
+            "- Nombres exactos como aparecen en la planilla.\n"
+            "- Si un nombre es ilegible o el campo está vacío, usá \"[NOMBRE ILEGIBLE]\" "
+            "como valor de target_name u owner_name (nunca omitas la fila).\n"
+            "- Cada marca se asocia ÚNICAMENTE a la fila de texto a su izquierda inmediata. "
+            "No reasignes marcas entre filas diferentes.\n"
+            "- confidence_score de 0.0 a 1.0 para cada fila según legibilidad "
+            "(≤ 0.3 si el nombre es [NOMBRE ILEGIBLE])."
         )
 
     # ── Mapping ─────────────────────────────────────────────────
