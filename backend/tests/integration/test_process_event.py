@@ -22,8 +22,8 @@ def test_flujo_completo_del_evento():
         interactions=[Interaction(receptor_name="Matias", interested=True)]
     )
     
-    # Configuramos el Mock para que devuelva una planilla por cada llamada
-    mock_ai.extract_from_image.side_effect = [form_a, form_b]
+    # Configuramos el Mock para que devuelva ambas planillas en batch
+    mock_ai.extract_batch.return_value = [form_a, form_b]
     
     # Instanciamos el motor real con su normalizador
     normalizer = NameNormalizer()
@@ -101,7 +101,7 @@ def test_pipeline_unifica_nombres_antes_de_matches_y_planilla():
         ],
     )
 
-    mock_ai.extract_from_image.side_effect = [form_maria, form_tamara, form_hernan]
+    mock_ai.extract_batch.return_value = [form_maria, form_tamara, form_hernan]
 
     normalizer = NameNormalizer(threshold=85)
     engine = MatchEngine(normalizer=normalizer)

@@ -15,6 +15,11 @@ class AIProvider(ABC):
         Contrato (Interfaz) para cualquier proveedor de IA.
         Sigue el Principio de Inversión de Dependencias (D en SOLID).
         """
+        pass
+
+    @abstractmethod
+    def extract_batch(self, images_list: list[bytes]) -> list[FormResult]:
+        """Procesa un lote de imágenes en un solo request (máx. 25)."""
         pass    
     
 class MatchRepository(ABC):

@@ -1,36 +1,64 @@
+import json
 import pytest
 from unittest.mock import MagicMock, patch
 from app.infrastructure.ai.gemini_provider import GeminiAIProvider
 from app.core.entities import FormResult
 
-def test_gemini_provider_extrae_datos_correctamente():
-    # 1. Setup: Simulamos la respuesta que daría Gemini
-    mock_response_content = """
-    {
-        "owner_name": "Matias",
-        "votes": [
-            {"target_name": "Sofia", "is_interested": true},
-            {"target_name": "Juan", "is_interested": false}
-        ]
-    }
-    """
-    
-    # Creamos un mock del objeto que devuelve LangChain
+
+def test_gemini_provider_extract_batch():
+    """Verifica que extract_batch mapea correctamente la respuesta JSON."""
+    response_json = json.dumps([
+        {
+            "owner_name": "Matias",
+            "votes": [
+                {"target_name": "Sofia", "is_interested": True},
+                {"target_name": "Juan", "is_interested": False},
+            ],
+        },
+        {
+            "owner_name": "Sofia",
+            "votes": [
+                {"target_name": "Matias", "is_interested": True},
+            ],
+        },
+    ])
+
     mock_response = MagicMock()
-    mock_response.content = mock_response_content
+    mock_response.text = response_json
 
-    # 2. Ejecución: Parcheamos ChatGoogleGenerativeAI para que no llame a la API real
-    with patch("app.infrastructure.ai.gemini_provider.ChatGoogleGenerativeAI") as MockLLM:
-        # Configuramos el mock para que devuelva nuestra respuesta simulada
-        MockLLM.return_value.invoke.return_value = mock_response
-        
+    with patch("app.infrastructure.ai.gemini_provider.genai") as mock_genai:
+        mock_client = MagicMock()
+        mock_genai.Client.return_value = mock_client
+        mock_client.models.generate_content.return_value = mock_response
+
         provider = GeminiAIProvider()
-        # Pasamos bytes vacíos ya que la IA está mockeada
-        result = provider.extract_from_image(b"fake_image_bytes")
+        results = provider.extract_batch([b"img1", b"img2"])
 
-        # 3. Validaciones (Assertions)
+        assert len(results) == 2
+        assert isinstance(results[0], FormResult)
+        assert results[0].owner.name == "Matias"
+        assert len(results[0].interactions) == 2
+        assert results[0].interactions[0].interested is True
+        assert results[1].owner.name == "Sofia"
+
+
+def test_gemini_provider_extract_from_image_delegates_to_batch():
+    """extract_from_image debe delegar a extract_batch."""
+    response_json = json.dumps([{
+        "owner_name": "Matias",
+        "votes": [{"target_name": "Sofia", "is_interested": True}],
+    }])
+
+    mock_response = MagicMock()
+    mock_response.text = response_json
+
+    with patch("app.infrastructure.ai.gemini_provider.genai") as mock_genai:
+        mock_client = MagicMock()
+        mock_genai.Client.return_value = mock_client
+        mock_client.models.generate_content.return_value = mock_response
+
+        provider = GeminiAIProvider()
+        result = provider.extract_from_image(b"fake_image")
+
         assert isinstance(result, FormResult)
         assert result.owner.name == "Matias"
-        assert len(result.interactions) == 2
-        assert result.interactions[0].receptor_name == "Sofia"
-        assert result.interactions[0].interested is True

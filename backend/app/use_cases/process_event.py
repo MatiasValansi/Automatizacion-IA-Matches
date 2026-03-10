@@ -43,6 +43,8 @@ class ProcessEventUseCase:
         """
         all_results = []
         failed_images = []  # índices (1-based) de imágenes que fallaron
+        pending_bytes: list[bytes] = []   # imágenes optimizadas a enviar por batch
+        pending_indices: list[int] = []   # índice original de cada pending
 
         for idx, img_bytes in enumerate(images):
             img_b64 = base64.b64encode(img_bytes).decode()
@@ -56,20 +58,22 @@ class ProcessEventUseCase:
             # 2. Optimizar imagen antes de enviar a Gemini
             optimized_b64 = ImageOptimizer.optimize_base64(img_b64)
             optimized_bytes = base64.b64decode(optimized_b64)
+            pending_bytes.append(optimized_bytes)
+            pending_indices.append(idx)
 
-            # 3. Extraer datos con IA (con tolerancia a fallos)
+        # 3. Extraer datos con IA en batch (todas las no-cacheadas juntas)
+        if pending_bytes:
             try:
-                result = self.ai_provider.extract_from_image(optimized_bytes)
+                batch_results = self.ai_provider.extract_batch(pending_bytes)
+                for i, result in enumerate(batch_results):
+                    original_idx = pending_indices[i]
+                    # 4. Guardar en cache
+                    img_b64 = base64.b64encode(images[original_idx]).decode()
+                    image_cache.set(img_b64, result)
+                    all_results.append(result)
             except Exception as e:
-                logger.error(
-                    f"[ProcessEvent] Imagen {idx + 1}/{len(images)} falló: {e}"
-                )
-                failed_images.append(idx + 1)
-                continue
-
-            # 4. Guardar en cache
-            image_cache.set(img_b64, result)
-            all_results.append(result)
+                logger.error(f"[ProcessEvent] Batch falló: {e}")
+                failed_images = [idx + 1 for idx in pending_indices]
 
         # Si no se pudo procesar ninguna imagen, lanzar error
         if not all_results:
