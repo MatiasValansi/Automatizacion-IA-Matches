@@ -112,49 +112,48 @@ class GeminiAIProvider(AIProvider):
 
     @staticmethod
     def build_system_prompt() -> str:
-        """System prompt para la API de Gemini optimizado para planillas con paralaje."""
+        """System prompt para la API de Gemini optimizado para planillas de Speed Dating."""
         return (
             "Sos un sistema experto de OCR para planillas de Speed Dating. "
             "Tu tarea es extraer con precisión los datos de tablas manuscritas, "
             "incluso cuando la imagen presenta inclinación o distorsión de perspectiva.\n\n"
-            "INSTRUCCIONES DE ANÁLISIS VISUAL:\n"
-            "1. Identificá las líneas horizontales de la tabla que separan cada fila de participantes.\n"
-            "2. Cada marca (X, ✓, check o tachadura) debe asociarse ESTRICTAMENTE a la línea de texto "
-            "que está a su IZQUIERDA INMEDIATA en la MISMA fila horizontal de la tabla. "
-            "Nunca asignes una marca a una fila superior o inferior; seguí siempre la línea horizontal "
-            "de la grilla como referencia, no la posición vertical absoluta en píxeles.\n"
-            "3. Si detectás inclinación en la imagen, usá las líneas de la tabla como guía principal "
-            "para la asociación fila↔marca. La alineación con la grilla tiene prioridad absoluta "
-            "sobre las coordenadas de píxeles.\n"
-            "4. NOMBRES ILEGIBLES O EN BLANCO: Si el nombre de un participante en una fila es "
-            "ilegible, está borroso, tachado o el campo está vacío, NO lo ignores ni lo omitas. "
-            "Devolvé el texto exacto [NOMBRE ILEGIBLE] como valor de target_name u owner_name. "
-            "Nunca saltees una fila; toda fila visible de la tabla debe generar una entrada en la salida.\n"
-            "5. Para cada fila extraída, evaluá qué tan legible y confiable es la lectura "
-            "y asigná un confidence_score entre 0.0 (ilegible/dudoso) y 1.0 (perfectamente claro). "
-            "Las filas con [NOMBRE ILEGIBLE] deben tener confidence_score ≤ 0.3.\n\n"
+            "FLUJO ESTRICTO DE ANÁLISIS — seguí estos pasos en orden:\n\n"
+            "PASO 1 — IDENTIFICACIÓN DEL EMISOR:\n"
+            "Localizá el texto manuscrito junto al campo 'Tu nombre y apellido:'. "
+            "Ese texto es el owner_name (dueño de la planilla). "
+            "Si no encontrás ese campo, buscá el nombre manuscrito en la parte superior de la imagen. "
+            "NUNCA devuelvas un valor genérico como 'Participant'; siempre extraé el nombre real escrito a mano.\n\n"
+            "PASO 2 — EXTRACCIÓN DE TABLA:\n"
+            "Una vez identificado el emisor, procesá la tabla de la planilla.\n"
+            "- Cada marca (X, ✓, check o tachadura) debe asociarse ESTRICTAMENTE a la fila "
+            "de texto que está a su IZQUIERDA INMEDIATA en la MISMA fila horizontal de la tabla.\n"
+            "- Si detectás inclinación, usá las líneas de la grilla como guía principal "
+            "para la asociación fila↔marca (prioridad absoluta sobre coordenadas de píxeles).\n\n"
+            "PASO 3 — REGLA DE OMISIÓN:\n"
+            "Solo incluí en la salida las filas donde la columna 'Nombre' contenga texto manuscrito real. "
+            "Si una fila está vacía, solo tiene marcas sin nombre escrito, o el campo de nombre está en blanco, "
+            "IGNORALA por completo y NO la incluyas en el JSON de salida.\n\n"
             "FORMATO DE SALIDA: JSON estrictamente válido."
         )
 
     def _get_batch_prompt(self, image_count: int) -> str:
         return (
             f"Recibís {image_count} imágenes de planillas de Speed Dating. "
-            "Para CADA imagen, extraé el dueño de la planilla y sus votos. "
+            "Para CADA imagen, seguí el flujo estricto: primero identificá al emisor "
+            "(owner_name) y luego extraé sus interacciones.\n"
             "Respondé SOLO un array JSON con exactamente un objeto por imagen, "
             "en el MISMO orden en que aparecen las imágenes:\n"
             '[{"owner_name": "str", '
-            '"votes": [{"target_name": "str", "is_interested": bool, '
-            '"confidence_score": float}]}]\n'
+            '"interactions": [{"receptor_name": "str", "interested": bool}]}]\n'
             "Reglas OBLIGATORIAS:\n"
-            "- Incluí TODAS las filas visibles de la tabla, sin excepción.\n"
+            "- owner_name: el nombre manuscrito junto a 'Tu nombre y apellido:' o en la parte superior. "
+            "NUNCA uses 'Participant' ni valores genéricos.\n"
+            "- Solo incluí filas donde la columna 'Nombre' tenga texto manuscrito real. "
+            "Omití filas vacías o sin nombre escrito.\n"
             "- Sí/✓/marca = true, No/✗/vacío = false.\n"
             "- Nombres exactos como aparecen en la planilla.\n"
-            "- Si un nombre es ilegible o el campo está vacío, usá \"[NOMBRE ILEGIBLE]\" "
-            "como valor de target_name u owner_name (nunca omitas la fila).\n"
             "- Cada marca se asocia ÚNICAMENTE a la fila de texto a su izquierda inmediata. "
-            "No reasignes marcas entre filas diferentes.\n"
-            "- confidence_score de 0.0 a 1.0 para cada fila según legibilidad "
-            "(≤ 0.3 si el nombre es [NOMBRE ILEGIBLE])."
+            "No reasignes marcas entre filas diferentes."
         )
 
     # ── Mapping ─────────────────────────────────────────────────
@@ -181,10 +180,9 @@ class GeminiAIProvider(AIProvider):
         owner = Participant(name=data["owner_name"])
         interactions = [
             Interaction(
-                receptor_name=v["target_name"],
-                interested=v["is_interested"],
-                confidence_score=v.get("confidence_score", 1.0),
+                receptor_name=v["receptor_name"],
+                interested=v["interested"],
             )
-            for v in data["votes"]
+            for v in data["interactions"]
         ]
         return FormResult(owner=owner, interactions=interactions)

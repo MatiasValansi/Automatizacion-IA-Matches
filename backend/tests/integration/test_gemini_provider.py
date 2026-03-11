@@ -10,15 +10,15 @@ def test_gemini_provider_extract_batch():
     response_json = json.dumps([
         {
             "owner_name": "Matias",
-            "votes": [
-                {"target_name": "Sofia", "is_interested": True},
-                {"target_name": "Juan", "is_interested": False},
+            "interactions": [
+                {"receptor_name": "Sofia", "interested": True},
+                {"receptor_name": "Juan", "interested": False},
             ],
         },
         {
             "owner_name": "Sofia",
-            "votes": [
-                {"target_name": "Matias", "is_interested": True},
+            "interactions": [
+                {"receptor_name": "Matias", "interested": True},
             ],
         },
     ])
@@ -46,7 +46,7 @@ def test_gemini_provider_extract_from_image_delegates_to_batch():
     """extract_from_image debe delegar a extract_batch."""
     response_json = json.dumps([{
         "owner_name": "Matias",
-        "votes": [{"target_name": "Sofia", "is_interested": True}],
+        "interactions": [{"receptor_name": "Sofia", "interested": True}],
     }])
 
     mock_response = MagicMock()
