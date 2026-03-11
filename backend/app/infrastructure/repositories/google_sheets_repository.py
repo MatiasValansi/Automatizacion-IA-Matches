@@ -95,7 +95,10 @@ class GoogleSheetsAuditRepository(AuditRepository):
 
     # ── Escritura ────────────────────────────────────────────────
     def save_audit(
-        self, event_name: str, records: list[AuditRecord]
+        self,
+        event_name: str,
+        records: list[AuditRecord],
+        participants: list[str] | None = None,
     ) -> None:
         if not self.webhook_url:
             print("⚠️ Error: No se encontró la URL del Webhook de Google.")
@@ -114,6 +117,7 @@ class GoogleSheetsAuditRepository(AuditRepository):
                 }
                 for r in records
             ],
+            "participants": participants or [],
         }
 
         try:

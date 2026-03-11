@@ -2,10 +2,11 @@ from __future__ import annotations
 import base64
 import logging
 from typing import TYPE_CHECKING
-from app.core.entities import AuditRecord
+from app.core.entities import AuditRecord, FormResult, Interaction, Participant
 from app.core.interfaces import AIProvider, AuditRepository, MatchRepository
 from app.use_cases.match_engine import MatchEngine
 from app.use_cases.duplicate_detector import DuplicateDetector
+from app.use_cases.name_normalizer import NameNormalizer
 from app.services.image_optimizer import ImageOptimizer
 from app.infrastructure.image_preprocessor import ImagePreprocessor
 from app.services.result_cache import image_cache
@@ -28,12 +29,14 @@ class ProcessEventUseCase:
                  match_engine: MatchEngine, 
                  repository: MatchRepository,
                  audit_repo: AuditRepository,
-                 duplicate_detector: DuplicateDetector):
+                 duplicate_detector: DuplicateDetector,
+                 name_normalizer: NameNormalizer | None = None):
         self.ai_provider = ai_provider
         self.match_engine = match_engine
         self.repository = repository
         self.audit_repo = audit_repo
         self.duplicate_detector = duplicate_detector
+        self.name_normalizer = name_normalizer or NameNormalizer()
 
     def execute(self, event_name: str, images: list[bytes]) -> dict:
         """
@@ -109,9 +112,13 @@ class ProcessEventUseCase:
             all_results
         )
 
-        # ── FASE 1b: Persistir en Auditoría IA ─────────────────────
-        audit_records = self._form_results_to_audit_records(unified_results)
-        self.audit_repo.save_audit(event_name, audit_records)
+        # ── FASE 1b: Normalizar nombres para presentación ────────
+        normalized_results = self._normalize_form_results(unified_results)
+
+        # ── FASE 1c: Persistir en Auditoría IA ─────────────────────
+        audit_records = self._form_results_to_audit_records(normalized_results)
+        unique_participants = self._collect_unique_participants(normalized_results)
+        self.audit_repo.save_audit(event_name, audit_records, unique_participants)
 
         # ── FASE 2: Matches desde datos auditados ──────────────────
         # El motor lee de 'Auditoría IA', priorizando correcciones
@@ -131,6 +138,40 @@ class ProcessEventUseCase:
             "failed_indices": failed_images,
             "duplicates_detected": len(duplicate_merges),
         }
+
+    def _normalize_form_results(
+        self, form_results: list[FormResult]
+    ) -> list[FormResult]:
+        """Normaliza todos los nombres para presentación (Title Case, trim).
+        Preserva [NOMBRE ILEGIBLE] sin modificar."""
+        normalized: list[FormResult] = []
+        for form in form_results:
+            owner_name = self.name_normalizer.normalize_display(form.owner.name)
+            new_owner = Participant(name=owner_name, phone=form.owner.phone)
+            new_interactions = [
+                Interaction(
+                    receptor_name=self.name_normalizer.normalize_display(
+                        inter.receptor_name
+                    ),
+                    interested=inter.interested,
+                    confidence_score=inter.confidence_score,
+                )
+                for inter in form.interactions
+            ]
+            normalized.append(FormResult(owner=new_owner, interactions=new_interactions))
+        return normalized
+
+    @staticmethod
+    def _collect_unique_participants(
+        form_results: list[FormResult],
+    ) -> list[str]:
+        """Extrae la lista de participantes únicos (owners + targets)."""
+        names: set[str] = set()
+        for form in form_results:
+            names.add(form.owner.name)
+            for interaction in form.interactions:
+                names.add(interaction.receptor_name)
+        return sorted(names)
 
     @staticmethod
     def _form_results_to_audit_records(

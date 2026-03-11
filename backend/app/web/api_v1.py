@@ -51,6 +51,7 @@ use_case = ProcessEventUseCase(
     repository=repository,
     audit_repo=audit_repo,
     duplicate_detector=duplicate_detector,
+    name_normalizer=normalizer,
 )
 
 @app.get("/")

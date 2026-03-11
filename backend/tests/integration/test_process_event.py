@@ -14,7 +14,7 @@ def _make_in_memory_audit_repo():
     """
     store: dict[str, list[AuditRecord]] = {}
     mock = MagicMock()
-    mock.save_audit.side_effect = lambda name, records: store.__setitem__(name, records)
+    mock.save_audit.side_effect = lambda name, records, participants=None: store.__setitem__(name, records)
     mock.get_audited_results.side_effect = lambda name: store.get(name, [])
     return mock
 

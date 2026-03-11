@@ -1,6 +1,8 @@
 from thefuzz import fuzz
 import unicodedata
 
+ILEGIBLE_TAG = "[NOMBRE ILEGIBLE]"
+
 class NameNormalizer:
     """
     Servicio encargado de unificar criterios de nombres.
@@ -32,6 +34,16 @@ class NameNormalizer:
             return ""
         # Reutilizamos tu lógica de limpieza
         return self._clean_string(text)
+
+    def normalize_display(self, text: str) -> str:
+        """Normaliza un nombre para presentación: Title Case, trim espacios.
+        Preserva [NOMBRE ILEGIBLE] sin modificar."""
+        if not text:
+            return ""
+        text = text.strip()
+        if text == ILEGIBLE_TAG:
+            return text
+        return " ".join(text.split()).title()
 
     def _clean_string(self, text: str) -> str:
         """Normaliza tildes, quita espacios y pasa a minúsculas."""

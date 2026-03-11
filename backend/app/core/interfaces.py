@@ -50,9 +50,14 @@ class AuditRepository(ABC):
 
     @abstractmethod
     def save_audit(
-        self, event_name: str, records: list[AuditRecord]
+        self,
+        event_name: str,
+        records: list[AuditRecord],
+        participants: list[str] | None = None,
     ) -> None:
-        """Persiste los registros de extracción en la hoja 'Auditoría IA'."""
+        """Persiste los registros de extracción en la hoja 'Auditoría IA'.
+        Si se provee `participants`, envía la lista de nombres únicos
+        para generar dropdowns de corrección."""
         pass
 
     @abstractmethod
