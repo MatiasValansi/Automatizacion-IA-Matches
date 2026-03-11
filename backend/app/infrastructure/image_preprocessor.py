@@ -9,6 +9,7 @@ Pipeline:
   1. Detección de contorno del papel (Canny → Adaptive Threshold → Hough Lines)
   2. Transformación de perspectiva (warpPerspective)
   3. Post-procesamiento (contraste CLAHE + nitidez)
+  4. Mejora de cabecera (CLAHE fuerte + binarización adaptativa en el 20 % superior)
 """
 
 import logging
@@ -37,6 +38,11 @@ class ImagePreprocessor:
     ADAPTIVE_C = 2                   # constante para threshold adaptativo
     CLAHE_CLIP_LIMIT = 2.0           # límite de contraste CLAHE
     CLAHE_TILE_SIZE = (8, 8)         # tamaño de grilla CLAHE
+    HEADER_RATIO = 0.20               # fracción superior de la imagen (cabecera)
+    HEADER_CLAHE_CLIP = 4.0           # CLAHE más agresivo para cabecera
+    HEADER_CLAHE_TILE = (4, 4)        # grilla más fina para cabecera
+    HEADER_ADAPTIVE_BLOCK = 31        # bloque para binarización de cabecera
+    HEADER_ADAPTIVE_C = 10            # constante para binarización de cabecera
     SHARPEN_KERNEL = np.array(       # kernel de nitidez suave
         [[0, -1, 0], [-1, 5, -1], [0, -1, 0]], dtype=np.float32
     )
@@ -73,6 +79,7 @@ class ImagePreprocessor:
             )
 
         img = cls._enhance(img)
+        img = cls._enhance_header(img)
         return cls._encode(img)
 
     @classmethod
@@ -352,6 +359,58 @@ class ImagePreprocessor:
         img_enhanced = cv2.filter2D(img_enhanced, -1, cls.SHARPEN_KERNEL)
 
         return img_enhanced
+
+    # ── Mejora de cabecera ──────────────────────────────────────
+
+    @classmethod
+    def _enhance_header(cls, img: np.ndarray) -> np.ndarray:
+        """
+        Mejora la zona del encabezado (20 % superior) para resaltar
+        el trazo de birome y eliminar sombras de celular:
+
+        1. Extrae el ROI de cabecera.
+        2. Aplica CLAHE fuerte sobre el canal L (LAB) para normalizar brillo.
+        3. Binariza con umbral adaptativo para obtener trazo nítido B/N.
+        4. Re-ensambla la cabecera mejorada con el cuerpo original.
+        """
+        h = img.shape[0]
+        header_h = int(h * cls.HEADER_RATIO)
+        if header_h < 10:
+            return img
+
+        header = img[:header_h].copy()
+        body = img[header_h:]
+
+        # --- CLAHE fuerte en espacio LAB ---
+        lab = cv2.cvtColor(header, cv2.COLOR_BGR2LAB)
+        l_ch, a_ch, b_ch = cv2.split(lab)
+
+        clahe = cv2.createCLAHE(
+            clipLimit=cls.HEADER_CLAHE_CLIP,
+            tileGridSize=cls.HEADER_CLAHE_TILE,
+        )
+        l_ch = clahe.apply(l_ch)
+
+        # --- Binarización adaptativa ---
+        binary = cv2.adaptiveThreshold(
+            l_ch,
+            255,
+            cv2.ADAPTIVE_THRESH_GAUSSIAN_C,
+            cv2.THRESH_BINARY,
+            cls.HEADER_ADAPTIVE_BLOCK,
+            cls.HEADER_ADAPTIVE_C,
+        )
+
+        # Convertir a BGR (3 canales) para re-ensamblar
+        header_enhanced = cv2.cvtColor(binary, cv2.COLOR_GRAY2BGR)
+
+        result = np.vstack([header_enhanced, body])
+        logger.info(
+            "[Preprocessor] Cabecera mejorada (top %d px de %d)",
+            header_h,
+            h,
+        )
+        return result
 
     # ── Codificación / Decodificación ───────────────────────────
 
