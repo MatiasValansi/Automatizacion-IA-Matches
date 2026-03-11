@@ -6,7 +6,7 @@ from app.core.entities import AuditRecord, FormResult, Interaction, Participant
 from app.core.interfaces import AIProvider, AuditRepository, MatchRepository
 from app.use_cases.match_engine import MatchEngine
 from app.use_cases.duplicate_detector import DuplicateDetector
-from app.use_cases.name_normalizer import NameNormalizer
+from app.use_cases.name_normalizer import NameNormalizer, ILEGIBLE_TAG
 from app.services.image_optimizer import ImageOptimizer
 from app.infrastructure.image_preprocessor import ImagePreprocessor
 from app.services.result_cache import image_cache
@@ -107,9 +107,12 @@ class ProcessEventUseCase:
                 f"Procesadas exitosamente: {len(all_results)}/{len(images)}"
             )
 
-        # ── FASE 1: Unificación de nombres ─────────────────────────
+        # ── FASE 1: Limpieza de datos ──────────────────────────────
+        cleaned_results = self._clean_form_results(all_results)
+
+        # ── FASE 1a: Unificación de nombres ────────────────────────
         unified_results, duplicate_merges = self.duplicate_detector.detect_and_unify(
-            all_results
+            cleaned_results
         )
 
         # ── FASE 1b: Normalizar nombres para presentación ────────
@@ -138,6 +141,45 @@ class ProcessEventUseCase:
             "failed_indices": failed_images,
             "duplicates_detected": len(duplicate_merges),
         }
+
+    # ── Limpieza de datos ──────────────────────────────────────────
+
+    _INVALID_RECEPTOR_VALUES = {ILEGIBLE_TAG, "none", ""}
+    _SUSPECT_OWNER_VALUES = {"participant", "ilegible"}
+
+    def _clean_form_results(
+        self, form_results: list[FormResult]
+    ) -> list[FormResult]:
+        """Elimina interacciones inválidas y alerta sobre emisores sospechosos.
+
+        1. Descarta interacciones con receptor [NOMBRE ILEGIBLE], None o vacío.
+        2. Descarta votos negativos sin receptor real (fantasma).
+        3. Loguea advertencia si el owner necesita revisión manual.
+        """
+        cleaned: list[FormResult] = []
+        for form in form_results:
+            # Alerta de emisor sospechoso
+            owner_lower = (form.owner.name or "").strip().lower()
+            if owner_lower in self._SUSPECT_OWNER_VALUES:
+                logger.warning(
+                    "[ProcessEvent] Emisor sospechoso '%s' detectado. "
+                    "La planilla requiere revisión manual de identidad.",
+                    form.owner.name,
+                )
+
+            valid_interactions: list[Interaction] = []
+            for inter in form.interactions:
+                receptor = (inter.receptor_name or "").strip()
+
+                # Filtrar receptores inválidos (ilegible, None, vacío)
+                # Esto también elimina votos negativos fantasma (sin receptor real)
+                if not receptor or receptor.lower() in self._INVALID_RECEPTOR_VALUES:
+                    continue
+
+                valid_interactions.append(inter)
+
+            cleaned.append(FormResult(owner=form.owner, interactions=valid_interactions))
+        return cleaned
 
     def _normalize_form_results(
         self, form_results: list[FormResult]
