@@ -9,7 +9,7 @@ Pipeline:
   1. Detección de contorno del papel (Canny → Adaptive Threshold → Hough Lines)
   2. Transformación de perspectiva (warpPerspective)
   3. Post-procesamiento (contraste CLAHE + nitidez)
-  4. Mejora de cabecera (CLAHE fuerte + binarización adaptativa en el 20 % superior)
+  4. Mejora de cabecera (CLAHE moderado en el 20 % superior, sin binarización)
 """
 
 import logging
@@ -366,12 +366,15 @@ class ImagePreprocessor:
     def _enhance_header(cls, img: np.ndarray) -> np.ndarray:
         """
         Mejora la zona del encabezado (20 % superior) para resaltar
-        el trazo de birome y eliminar sombras de celular:
+        el trazo de birome/lápiz preservando sombras y matices:
 
         1. Extrae el ROI de cabecera.
-        2. Aplica CLAHE fuerte sobre el canal L (LAB) para normalizar brillo.
-        3. Binariza con umbral adaptativo para obtener trazo nítido B/N.
-        4. Re-ensambla la cabecera mejorada con el cuerpo original.
+        2. Aplica CLAHE moderado sobre el canal L (LAB) para normalizar brillo
+           sin destruir trazos suaves a lápiz.
+        3. Re-ensambla la cabecera mejorada con el cuerpo original.
+
+        NOTA: La binarización adaptativa fue desactivada intencionalmente —
+        borraba trazos de lápiz/birome en la cabecera.
         """
         h = img.shape[0]
         header_h = int(h * cls.HEADER_RATIO)
@@ -381,7 +384,7 @@ class ImagePreprocessor:
         header = img[:header_h].copy()
         body = img[header_h:]
 
-        # --- CLAHE fuerte en espacio LAB ---
+        # --- CLAHE moderado en espacio LAB (preserva trazos de lápiz) ---
         lab = cv2.cvtColor(header, cv2.COLOR_BGR2LAB)
         l_ch, a_ch, b_ch = cv2.split(lab)
 
@@ -391,22 +394,13 @@ class ImagePreprocessor:
         )
         l_ch = clahe.apply(l_ch)
 
-        # --- Binarización adaptativa ---
-        binary = cv2.adaptiveThreshold(
-            l_ch,
-            255,
-            cv2.ADAPTIVE_THRESH_GAUSSIAN_C,
-            cv2.THRESH_BINARY,
-            cls.HEADER_ADAPTIVE_BLOCK,
-            cls.HEADER_ADAPTIVE_C,
-        )
-
-        # Convertir a BGR (3 canales) para re-ensamblar
-        header_enhanced = cv2.cvtColor(binary, cv2.COLOR_GRAY2BGR)
+        lab_enhanced = cv2.merge([l_ch, a_ch, b_ch])
+        header_enhanced = cv2.cvtColor(lab_enhanced, cv2.COLOR_LAB2BGR)
 
         result = np.vstack([header_enhanced, body])
         logger.info(
-            "[Preprocessor] Cabecera mejorada (top %d px de %d)",
+            "[Preprocessor] Cabecera mejorada con CLAHE (sin binarización) "
+            "(top %d px de %d)",
             header_h,
             h,
         )
