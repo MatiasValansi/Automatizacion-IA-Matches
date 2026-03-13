@@ -12,7 +12,6 @@ se inyectan vía NameNormalizer, sin modificar esta clase.
 from __future__ import annotations
 
 import logging
-from collections import Counter
 
 from app.core.entities import (
     DuplicateMerge,
@@ -28,8 +27,7 @@ logger = logging.getLogger(__name__)
 class DuplicateDetector:
     """
     Detecta nombres duplicados/similares entre todas las planillas de un evento.
-    Aplica clustering por similitud fuzzy (Union-Find) para unificar variantes
-    de un mismo nombre.
+    Delega la lógica de clustering y Regla de Oro al NameNormalizer.
     """
 
     def __init__(self, normalizer: NameNormalizer):
@@ -43,23 +41,38 @@ class DuplicateDetector:
         """
         Flujo completo:
         1. Recolecta todos los nombres que aparecen en las planillas.
-        2. Compara pares y clusteriza los similares (Union-Find).
-        3. Genera un reporte de decisiones (DuplicateMerge).
-        4. Remplaza los nombres duplicados por su versión canónica.
+        2. Delega la unificación inteligente al NameNormalizer.
+        3. Convierte las decisiones en objetos DuplicateMerge.
+        4. Reemplaza los nombres duplicados por su versión canónica.
 
         Returns:
             - unified_results: FormResults con nombres remapeados.
             - merges: Lista de decisiones para el reporte en Sheets.
         """
         all_names = self._collect_all_names(form_results)
-        name_counts = Counter(all_names)
-        unique_names = list(name_counts.keys())
 
-        if len(unique_names) < 2:
-            return form_results, []
+        # Delegar toda la lógica de agrupamiento al normalizador
+        result = self.normalizer.unify_names(all_names)
 
-        # Fase 1 — clustering
-        name_mapping, merges = self._cluster_names(unique_names, name_counts)
+        # Construir merges solo para los nombres que cambiaron
+        merges: list[DuplicateMerge] = []
+        for canonical, variants in result.groups.items():
+            for variant in variants:
+                if variant != canonical:
+                    score = self.normalizer.similarity_score(variant, canonical)
+                    merges.append(
+                        DuplicateMerge(
+                            name_a=variant,
+                            name_b=canonical,
+                            canonical_name=canonical,
+                            similarity_score=score,
+                            decision=(
+                                f"Se detectó que '{variant}' es probablemente la misma "
+                                f"persona que '{canonical}' (similitud: {score}%). "
+                                f"Se unificaron bajo el nombre '{canonical}'."
+                            ),
+                        )
+                    )
 
         if not merges:
             return form_results, []
@@ -69,7 +82,10 @@ class DuplicateDetector:
             len(merges),
         )
 
-        # Fase 2 — remapeo
+        # Construir mapping solo con los que cambian
+        name_mapping = {k: v for k, v in result.canonical_map.items() if k != v}
+
+        # Remapear
         unified = self._apply_mapping(form_results, name_mapping)
 
         return unified, merges
@@ -84,72 +100,6 @@ class DuplicateDetector:
             for interaction in form.interactions:
                 names.append(interaction.receptor_name)
         return names
-
-    def _cluster_names(
-        self,
-        unique_names: list[str],
-        name_counts: Counter,
-    ) -> tuple[dict[str, str], list[DuplicateMerge]]:
-        """
-        Compara todos los pares y los agrupa con Union-Find.
-        Retorna el mapping original→canónico y la lista de merges.
-        """
-        parent: dict[str, str] = {n: n for n in unique_names}
-
-        def find(x: str) -> str:
-            while parent[x] != x:
-                parent[x] = parent[parent[x]]  # path compression
-                x = parent[x]
-            return x
-
-        def union(a: str, b: str) -> None:
-            ra, rb = find(a), find(b)
-            if ra == rb:
-                return
-            # El nombre más frecuente (o más largo si empatan) queda como raíz.
-            if (name_counts[ra], len(ra)) >= (name_counts[rb], len(rb)):
-                parent[rb] = ra
-            else:
-                parent[ra] = rb
-
-        merges: list[DuplicateMerge] = []
-
-        for i in range(len(unique_names)):
-            for j in range(i + 1, len(unique_names)):
-                name_a = unique_names[i]
-                name_b = unique_names[j]
-
-                score = self.normalizer.similarity_score(name_a, name_b)
-
-                if score >= self.normalizer.threshold:
-                    # Antes de unir, guardamos la decisión
-                    # El canónico es el que quedará como raíz tras union
-                    union(name_a, name_b)
-                    canonical = find(name_a)  # post-union root
-                    other = name_b if canonical == name_a else name_a
-
-                    merges.append(
-                        DuplicateMerge(
-                            name_a=name_a,
-                            name_b=name_b,
-                            canonical_name=canonical,
-                            similarity_score=score,
-                            decision=(
-                                f"Se detectó que '{other}' es probablemente la misma "
-                                f"persona que '{canonical}' (similitud: {score}%). "
-                                f"Se unificaron bajo el nombre '{canonical}'."
-                            ),
-                        )
-                    )
-
-        # Construir mapping final: solo los nombres que cambian
-        name_mapping: dict[str, str] = {}
-        for name in unique_names:
-            root = find(name)
-            if root != name:
-                name_mapping[name] = root
-
-        return name_mapping, merges
 
     def _apply_mapping(
         self,

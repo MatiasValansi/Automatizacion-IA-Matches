@@ -120,13 +120,13 @@ class TestDetectDuplicates:
             f"Se esperaba un solo 'Carlos' pero se encontraron: {carlos_names}"
         )
 
-    def test_elige_nombre_mas_frecuente_como_canonico(self, detector):
-        """El nombre que más aparece debería ser el canónico."""
+    def test_elige_nombre_mas_largo_como_canonico(self, detector):
+        """El nombre más largo (más completo) debería ser el canónico."""
         forms = [
             FormResult(
                 owner=Participant(name="Marcos"),
                 interactions=[
-                    Interaction(receptor_name="Carlos Musica", interested=True),
+                    Interaction(receptor_name="Carlos M", interested=True),
                     Interaction(receptor_name="Laura", interested=False),
                 ],
             ),
@@ -142,18 +142,12 @@ class TestDetectDuplicates:
                     Interaction(receptor_name="Marcos", interested=True),
                 ],
             ),
-            FormResult(
-                owner=Participant(name="Pedro"),
-                interactions=[
-                    Interaction(receptor_name="Carlos Musicaa", interested=True),
-                ],
-            ),
         ]
 
         _, merges = detector.detect_and_unify(forms)
 
         assert len(merges) == 1
-        # "Carlos Musica" aparece 3 veces, "Carlos Musicaa" 1 vez
+        # "Carlos Musica" es el más largo/completo → canónico
         assert merges[0].canonical_name == "Carlos Musica"
 
 
