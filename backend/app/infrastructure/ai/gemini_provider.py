@@ -112,41 +112,40 @@ class GeminiAIProvider(AIProvider):
 
     @staticmethod
     def build_system_prompt() -> str:
-        """System prompt rediseñado para forzar la jerarquía visual y evitar el desplazamiento de nombres."""
         return (
-            "Sos un experto en digitalización de formularios. Tu prioridad absoluta es la INTEGRIDAD DE LA IDENTIDAD.\n\n"
-            "REGLA DE ORO: La planilla tiene dos zonas físicamente separadas. NO MEZCLES INFORMACIÓN ENTRE ELLAS.\n\n"
-            "ZONA 1: ENCABEZADO (Identificación del Dueño)\n"
-            "1. Buscá el logo 'eventio' o el texto impreso 'Tu nombre y apellido:'.\n"
-            "2. El texto escrito a mano que está INMEDIATAMENTE a la derecha o debajo de esa etiqueta es el 'owner_name'.\n"
-            "3. Este nombre está FÍSICAMENTE ARRIBA de la cuadrícula de la tabla.\n"
-            "4. Si no hay nada escrito en este espacio específico del encabezado, el resultado DEBE SER '[PROPIETARIO NO DETECTADO]'.\n\n"
-            "ZONA 2: TABLA DE INTERACCIONES (Receptores)\n"
-            "1. Bajá la mirada hasta encontrar la cuadrícula (grilla) con las columnas 'Nombre', 'Si', 'No'.\n"
-            "2. Los nombres que están DENTRO de las celdas de esta tabla son los 'receptor_name'.\n"
-            "3. PROHIBICIÓN CRÍTICA: El primer nombre de la tabla (ej. 'Jose L.') NUNCA es el dueño. Es el primer receptor.\n"
-            "4. Si un nombre aparece dentro de un recuadro de la tabla, tenés prohibido asignarlo a 'owner_name'.\n\n"
-            "REGLAS DE FILTRADO:\n"
-            "- Si una fila de la tabla no tiene un nombre escrito, IGNORALA (aunque tenga una X).\n"
-            "- Si el nombre del receptor es ilegible, usá '[NOMBRE ILEGIBLE]'.\n"
-            "- Sé extremadamente preciso con las iniciales (ej. 'Maria A.' vs 'Maria P.').\n\n"
-            "RESPUESTA: JSON estrictamente válido."
+            "Sos un experto en digitalización de formularios escritos a mano.\n"
+            "Tu tarea es analizar la imagen de una 'Planilla de Votación'.\n\n"
+            
+            "### ESTRUCTURA DE LA HOJA:\n"
+            "1. PROPIETARIO (owner_name): Es la persona que llena la planilla. "
+            "Su nombre NO está dentro de la tabla de votos. Está escrito arriba, "
+            "cerca de etiquetas como 'Tu nombre', 'Nombre y Apellido' o simplemente suelto en el encabezado.\n"
+            "2. VOTOS (voted_people): Son las personas listadas DENTRO de la tabla.\n\n"
+            
+            "### REGLAS DE EXTRACCIÓN:\n"
+            "- Identificá PRIMERO al dueño (owner_name). Si no es legible o está vacío, usá '[PROPIETARIO NO DETECTADO]'.\n"
+            "- Para cada fila de la tabla, extraé el nombre del receptor y si marcaron 'SI' o 'NO'.\n"
+            "- Sé extremadamente fiel a la caligrafía. No resumas nombres.\n\n"
+            
+            "### FORMATO DE SALIDA (JSON):\n"
+            "{\n"
+            "  'owner_name': 'Nombre del Dueño',\n"
+            "  'matches': [\n"
+            "    {'receptor_name': 'Persona 1', 'interested': true},\n"
+            "    {'receptor_name': 'Persona 2', 'interested': false}\n"
+            "  ]\n"
+            "}"
         )
 
     def _get_batch_prompt(self, image_count: int) -> str:
         return (
-            f"Analizá estas {image_count} planillas de forma independiente. "
-            "Seguí este proceso para cada una:\n"
-            "1. Escaneá el encabezado: Extraé el nombre del dueño (owner_name) que está arriba de la tabla.\n"
-            "2. Escaneá la tabla: Extraé los nombres dentro de las filas (receptor_name) y sus marcas (interested: true/false).\n\n"
-            "Formato de respuesta:\n"
-            '[{"owner_name": "NOMBRE_DEL_ENCABEZADO", '
-            '"interactions": [{"receptor_name": "NOMBRE_EN_TABLA", "interested": bool}]}]\n\n'
-            "CONDICIÓN DETERMINANTE:\n"
-            "- El 'owner_name' es el que escribe la planilla (arriba).\n"
-            "- El primer nombre de la tabla (usualmente en la primera fila de la grilla) es SIEMPRE un receptor.\n"
-            "- Si confundís el primer nombre de la tabla con el dueño, el sistema fallará. No lo hagas."
+            f"Analizá estas {image_count} planillas. Para cada una:\n"
+            "1. Buscá el dueño en el encabezado (arriba de la tabla).\n"
+            "2. Extraé la lista de nombres y votos de la tabla.\n\n"
+            "Respondé con este formato JSON:\n"
+            '[{"owner_name": "Nombre de Arriba", "interactions": [{"receptor_name": "Nombre en Tabla", "interested": bool}]}]'
         )
+        
 
     # ── Mapping ─────────────────────────────────────────────────
 
