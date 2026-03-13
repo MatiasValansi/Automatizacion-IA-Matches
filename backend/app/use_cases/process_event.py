@@ -42,18 +42,20 @@ class ProcessEventUseCase:
         """
         Flujo completo de procesamiento de un evento:
 
-        FASE 1 – Extracción y Auditoría
+        FASE 1 – Extracción batch
           1. Verifica cache para cada imagen.
-          2. Optimiza imágenes no cacheadas con ImageOptimizer.
-          3. Extrae datos de las imágenes con Gemini.
+          2. Preprocesa y optimiza imágenes no cacheadas.
+          3. Extrae datos de TODAS las imágenes con Gemini (batch).
           4. Cachea los resultados nuevos.
-          5. Detecta nombres duplicados y unifica variantes.
-          6. Persiste los resultados en la hoja 'Auditoría IA'.
 
-        FASE 2 – Matches (post-auditoría)
-          7. Lee los datos auditados (con posibles correcciones humanas).
-          8. El motor de cruce calcula matches desde la auditoría.
-          9. Persiste los matches en la hoja 'Matches'.
+        FASE 2 – Normalización centralizada
+          5. Limpia interacciones inválidas.
+          6. Detecta nombres duplicados y unifica variantes.
+          7. Normaliza nombres para presentación (Title Case).
+
+        FASE 3 – Matches locales + envío conjunto
+          8. Calcula matches mutuos con los datos ya normalizados.
+          9. Persiste auditoría y matches en Google Sheets.
 
         Retorna un dict con toda la info relevante para el frontend.
         """
@@ -118,19 +120,16 @@ class ProcessEventUseCase:
         # ── FASE 1b: Normalizar nombres para presentación ────────
         normalized_results = self._normalize_form_results(unified_results)
 
-        # ── FASE 1c: Persistir en Auditoría IA ─────────────────────
+        # ── FASE 2: Matches locales (con datos ya normalizados) ───
+        matches = self.match_engine.find_matches(normalized_results)
+
+        # ── FASE 3: Persistencia conjunta ─────────────────────────
         audit_records = self._form_results_to_audit_records(normalized_results)
         unique_participants = self._collect_unique_participants(normalized_results)
         self.audit_repo.save_audit(event_name, audit_records, unique_participants)
 
-        # ── FASE 2: Matches desde datos auditados ──────────────────
-        # El motor lee de 'Auditoría IA', priorizando correcciones
-        # humanas sobre la extracción de la IA.
-        matches = self.match_engine.find_matches_from_audit(event_name)
-
-        # ── FASE 3: Persistencia de matches y data cruda ───────────
         sheet_url = self.repository.save_matches(
-            event_name, unified_results, matches, duplicate_merges
+            event_name, normalized_results, matches, duplicate_merges
         )
 
         return {
