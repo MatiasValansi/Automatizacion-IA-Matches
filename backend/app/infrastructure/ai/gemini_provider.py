@@ -113,26 +113,25 @@ class GeminiAIProvider(AIProvider):
     @staticmethod
     def build_system_prompt() -> str:
         return (
-            "Sos un experto en digitalización de formularios escritos a mano.\n"
-            "Tu tarea es analizar la imagen de una 'Planilla de Votación'.\n\n"
-            
-            "### ESTRUCTURA DE LA HOJA:\n"
-            "1. PROPIETARIO (owner_name): Es la persona que llena la planilla. "
-            "Su nombre NO está dentro de la tabla de votos. Está escrito arriba, "
-            "cerca de etiquetas como 'Tu nombre', 'Nombre y Apellido' o simplemente suelto en el encabezado.\n"
-            "2. VOTOS (voted_people): Son las personas listadas DENTRO de la tabla.\n\n"
-            
-            "### REGLAS DE EXTRACCIÓN:\n"
-            "- Identificá PRIMERO al dueño (owner_name). Si no es legible o está vacío, usá '[PROPIETARIO NO DETECTADO]'.\n"
-            "- Para cada fila de la tabla, extraé el nombre del receptor y si marcaron 'SI' o 'NO'.\n"
-            "- Sé extremadamente fiel a la caligrafía. No resumas nombres.\n\n"
-            
+            "Sos un experto en digitalización de formularios. Tu objetivo es extraer los datos de una planilla social.\n\n"
+            "### CÓMO IDENTIFICAR AL DUEÑO (owner_name):\n"
+            "El dueño es quien completó la hoja. Su nombre aparece en el ENCABEZADO, "
+            "FUERA y ARRIBA de la tabla de votos, generalmente junto a la etiqueta "
+            "'Nombre y Apellido' o 'Tu nombre'. "
+            "NUNCA uses un nombre que esté DENTRO de la tabla como dueño.\n\n"
+            "### CÓMO EXTRAER LOS VOTOS (interactions):\n"
+            "Cada fila DENTRO de la tabla tiene un nombre y una marca de 'SI' o 'NO'.\n"
+            "- Transcribí cada nombre EXACTAMENTE como está escrito (nombre y apellido completos).\n"
+            "- Determiná si la marca indica 'SI' (interested: true) o 'NO' (interested: false).\n\n"
+            "### REGLAS:\n"
+            "- Si el nombre del dueño no es legible, usá '[PROPIETARIO NO DETECTADO]'.\n"
+            "- No inventes, corrijas ni abrevies ningún nombre.\n\n"
             "### FORMATO DE SALIDA (JSON):\n"
             "{\n"
-            "  'owner_name': 'Nombre del Dueño',\n"
-            "  'matches': [\n"
-            "    {'receptor_name': 'Persona 1', 'interested': true},\n"
-            "    {'receptor_name': 'Persona 2', 'interested': false}\n"
+            "  \"owner_name\": \"Nombre del Dueño\",\n"
+            "  \"interactions\": [\n"
+            "    {\"receptor_name\": \"Nombre en tabla\", \"interested\": true},\n"
+            "    {\"receptor_name\": \"Otro nombre\", \"interested\": false}\n"
             "  ]\n"
             "}"
         )
@@ -140,10 +139,10 @@ class GeminiAIProvider(AIProvider):
     def _get_batch_prompt(self, image_count: int) -> str:
         return (
             f"Analizá estas {image_count} planillas. Para cada una:\n"
-            "1. Buscá el dueño en el encabezado (arriba de la tabla).\n"
-            "2. Extraé la lista de nombres y votos de la tabla.\n\n"
-            "Respondé con este formato JSON:\n"
-            '[{"owner_name": "Nombre de Arriba", "interactions": [{"receptor_name": "Nombre en Tabla", "interested": bool}]}]'
+            "1. Identificá el owner_name en el ENCABEZADO (fuera de la tabla).\n"
+            "2. Para cada fila DENTRO de la tabla, extraé receptor_name (tal cual está escrito) e interested (true/false).\n\n"
+            "Devolvé un array JSON con un objeto por planilla:\n"
+            '[{"owner_name": "...", "interactions": [{"receptor_name": "...", "interested": true}]}]'
         )
         
 
