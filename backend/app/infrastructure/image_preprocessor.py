@@ -18,7 +18,7 @@ class ImagePreprocessor:
     CANNY_HIGH = 200
     CONTOUR_AREA_RATIO = 0.2
     APPROX_EPSILON_FACTOR = 0.02
-    TOP_MARGIN_EXPAND = 0.30      # 30 % de la altura total de la imagen
+    TOP_MARGIN_EXPAND = 0.08      # 8 % de la altura total de la imagen (era 0.30, demasiado agresivo)
 
     # ── Parámetros de Mejora de Tinta (post-enderezado) ──────────
     GAMMA_CORRECTION = 0.7           # más agresivo para oscurecer trazos
@@ -60,6 +60,13 @@ class ImagePreprocessor:
         corners = cls._detect_paper(img)
         if corners is None:
             logger.info("[Preprocessor] No se detectó hoja; se omite corrección de perspectiva.")
+            return img
+
+        # Si la hoja ya ocupa >85% del frame, el warp solo introduce ruido/distorsión
+        img_area = img.shape[0] * img.shape[1]
+        sheet_area = cv2.contourArea(corners)
+        if sheet_area / img_area > 0.85:
+            logger.info("[Preprocessor] Hoja ocupa >85% del frame; se omite warp.")
             return img
 
         ordered = cls._order_corners(corners)

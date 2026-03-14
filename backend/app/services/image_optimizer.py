@@ -10,8 +10,8 @@ logger = logging.getLogger(__name__)
 class ImageOptimizer:
     """Optimiza imágenes antes de enviarlas a la API de Gemini para reducir tokens."""
 
-    MAX_DIMENSION = 1024
-    JPEG_QUALITY = 80
+    MAX_DIMENSION = 2048   # era 1024 — checkboxes quedaban de 8-12px, ilegibles
+    JPEG_QUALITY = 92      # era 80
 
     @staticmethod
     def optimize_base64(image_base64: str) -> str:
