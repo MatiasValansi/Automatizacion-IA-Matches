@@ -7,6 +7,7 @@ from app.core.interfaces import AIProvider, AuditRepository, MatchRepository
 from app.use_cases.match_engine import MatchEngine
 from app.use_cases.duplicate_detector import DuplicateDetector
 from app.use_cases.name_normalizer import NameNormalizer, ILEGIBLE_TAG
+from app.use_cases.illegible_resolver import IllegibleResolver
 from app.services.image_optimizer import ImageOptimizer
 from app.infrastructure.image_preprocessor import ImagePreprocessor
 from app.services.result_cache import image_cache
@@ -24,19 +25,21 @@ class ProcessEventUseCase:
     el motor de matches y la persistencia en Sheets.
     """
 
-    def __init__(self, 
-                 ai_provider: AIProvider, 
-                 match_engine: MatchEngine, 
+    def __init__(self,
+                 ai_provider: AIProvider,
+                 match_engine: MatchEngine,
                  repository: MatchRepository,
                  audit_repo: AuditRepository,
                  duplicate_detector: DuplicateDetector,
-                 name_normalizer: NameNormalizer | None = None):
+                 name_normalizer: NameNormalizer | None = None,
+                 illegible_resolver: IllegibleResolver | None = None):
         self.ai_provider = ai_provider
         self.match_engine = match_engine
         self.repository = repository
         self.audit_repo = audit_repo
         self.duplicate_detector = duplicate_detector
         self.name_normalizer = name_normalizer or NameNormalizer()
+        self.illegible_resolver = illegible_resolver or IllegibleResolver()
 
     def execute(self, event_name: str, images: list[bytes]) -> dict:
         """
@@ -50,8 +53,9 @@ class ProcessEventUseCase:
 
         FASE 2 – Normalización centralizada
           5. Limpia interacciones inválidas.
-          6. Detecta nombres duplicados y unifica variantes.
-          7. Normaliza nombres para presentación (Title Case).
+          6. Intenta resolver propietarios ilegibles cruzando con otras planillas.
+          7. Detecta nombres duplicados y unifica variantes.
+          8. Normaliza nombres para presentación (Title Case).
 
         FASE 3 – Matches locales + envío conjunto
           8. Calcula matches mutuos con los datos ya normalizados.
@@ -112,9 +116,12 @@ class ProcessEventUseCase:
         # ── FASE 1: Limpieza de datos ──────────────────────────────
         cleaned_results = self._clean_form_results(all_results)
 
-        # ── FASE 1a: Unificación de nombres ────────────────────────
+        # ── FASE 1a: Resolución de propietarios ilegibles ──────────
+        resolved_results, _ = self.illegible_resolver.resolve(cleaned_results)
+
+        # ── FASE 1b: Unificación de nombres ────────────────────────
         unified_results, duplicate_merges = self.duplicate_detector.detect_and_unify(
-            cleaned_results
+            resolved_results
         )
 
         # ── FASE 1b: Normalizar nombres para presentación ────────
