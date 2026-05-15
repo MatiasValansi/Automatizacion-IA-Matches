@@ -71,6 +71,11 @@ class NameNormalizer:
         n2 = self._clean(name_b)
         return fuzz.token_set_ratio(n1, n2)
 
+    def unification_score(self, name_a: str, name_b: str) -> int:
+        """Score de similitud usado para decisiones de unificación (token_set_ratio).
+        Maneja bien nombres parciales/abreviados: 'Jose L' vs 'Jose Luis' → alto score."""
+        return self._unification_score(name_a, name_b)
+
     def are_similar(self, name_a: str, name_b: str) -> bool:
         """True si los nombres superan el umbral de similitud."""
         return self.similarity_score(name_a, name_b) >= self.threshold

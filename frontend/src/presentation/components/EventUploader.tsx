@@ -1,4 +1,4 @@
-import { useState, type FormEvent } from 'react';
+import { useState, useEffect, type FormEvent } from 'react';
 import type { ProcessEventUseCase } from '@/application';
 import { useEventUploader } from '@/presentation/hooks/useEventUploader';
 import { FileDropper } from './FileDropper';
@@ -13,8 +13,18 @@ export function EventUploader({ useCase }: EventUploaderProps) {
   const { state, submit, reset } = useEventUploader(useCase);
   const [eventName, setEventName] = useState('');
   const [files, setFiles] = useState<File[]>([]);
+  const [showSlowMessage, setShowSlowMessage] = useState(false);
 
   const isLoading = state.status === 'LOADING';
+
+  useEffect(() => {
+    if (!isLoading) {
+      setShowSlowMessage(false);
+      return;
+    }
+    const timer = setTimeout(() => setShowSlowMessage(true), 30_000);
+    return () => clearTimeout(timer);
+  }, [isLoading]);
 
   const canSubmit =
     eventName.trim().length > 0 && files.length > 0 && !isLoading;
@@ -97,6 +107,12 @@ export function EventUploader({ useCase }: EventUploaderProps) {
             'Procesar Evento'
           )}
         </button>
+
+        {isLoading && showSlowMessage && (
+          <p className="text-center text-xs text-white/50 animate-pulse">
+            Esto puede tardar unos minutos para eventos grandes…
+          </p>
+        )}
 
         {/* ── ERROR feedback ──────────────────────────── */}
         {state.status === 'ERROR' && state.error && (

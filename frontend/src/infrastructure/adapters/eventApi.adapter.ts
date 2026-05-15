@@ -17,7 +17,7 @@ export function createEventApiAdapter(
 ): EventApiPort {
   const client: AxiosInstance = axios.create({
     baseURL,
-    timeout: 120_000, // 2 min — OCR + AI can be slow
+    timeout: 240_000, // 4 min — Gemini throttle (4.2s/req) + Sheets webhook can exceed 2 min on large events
   });
 
   return {

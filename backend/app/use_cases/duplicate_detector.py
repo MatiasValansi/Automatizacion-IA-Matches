@@ -59,7 +59,7 @@ class DuplicateDetector:
         for canonical, variants in result.groups.items():
             for variant in variants:
                 if variant != canonical:
-                    score = self.normalizer.similarity_score(variant, canonical)
+                    score = self.normalizer.unification_score(variant, canonical)
                     merges.append(
                         DuplicateMerge(
                             name_a=variant,

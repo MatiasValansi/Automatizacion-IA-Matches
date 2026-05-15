@@ -143,8 +143,8 @@ class ProcessEventUseCase:
 
     # ── Limpieza de datos ──────────────────────────────────────────
 
-    _INVALID_RECEPTOR_VALUES = {ILEGIBLE_TAG, "none", ""}
-    _SUSPECT_OWNER_VALUES = {"participant", "ilegible"}
+    _INVALID_RECEPTOR_VALUES = {ILEGIBLE_TAG.lower(), "none", ""}
+    _SUSPECT_OWNER_VALUES = {"participant", "ilegible", "[propietario no detectado]"}
 
     def _clean_form_results(
         self, form_results: list[FormResult]

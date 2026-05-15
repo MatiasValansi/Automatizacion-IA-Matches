@@ -51,7 +51,7 @@ class GoogleSheetsMatchRepository(MatchRepository):
             print(f"[GoogleSheets] ✅ Webhook: {response.status_code} - {response.text[:200]}")
             if response.status_code == 200:
                 data = response.json()
-                return data.get("sheet", None)
+                return data.get("url", None)
             return None
         except ReadTimeout:
             # El servidor recibió los datos pero tardó en responder.

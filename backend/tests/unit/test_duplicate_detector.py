@@ -203,6 +203,59 @@ class TestNoDuplicates:
         assert len(unified) == 0
 
 
+# ── Consistencia del score ───────────────────────────────────────────
+
+
+class TestScoreConsistencia:
+    """Verifica que el score guardado en DuplicateMerge coincida con
+    el algoritmo real de unificación (token_set_ratio), no con fuzz.ratio."""
+
+    def test_score_usa_token_set_ratio_no_ratio(self):
+        """Para nombres parciales ('Jose L' vs 'Jose Luis'), token_set_ratio
+        da ~100 pero fuzz.ratio da ~77. El score guardado debe ser el alto."""
+        normalizer = NameNormalizer(threshold=60)
+        detector = DuplicateDetector(normalizer=normalizer)
+        forms = [
+            FormResult(
+                owner=Participant(name="Jose L"),
+                interactions=[Interaction(receptor_name="Ana", interested=True)],
+            ),
+            FormResult(
+                owner=Participant(name="Ana"),
+                interactions=[Interaction(receptor_name="Jose Luis", interested=True)],
+            ),
+        ]
+        _, merges = detector.detect_and_unify(forms)
+
+        assert len(merges) == 1
+        expected = normalizer.unification_score("Jose L", "Jose Luis")
+        assert merges[0].similarity_score == expected, (
+            f"Score incorrecto: se esperaba {expected} (token_set_ratio) "
+            f"pero se obtuvo {merges[0].similarity_score}"
+        )
+
+    def test_score_en_decision_coincide_con_score_guardado(self):
+        """El porcentaje que aparece en el texto de la decisión debe
+        coincidir con el similarity_score del DuplicateMerge."""
+        normalizer = NameNormalizer(threshold=80)
+        detector = DuplicateDetector(normalizer=normalizer)
+        forms = [
+            FormResult(
+                owner=Participant(name="Carlos Musica"),
+                interactions=[Interaction(receptor_name="Laura", interested=True)],
+            ),
+            FormResult(
+                owner=Participant(name="Laura"),
+                interactions=[Interaction(receptor_name="Carlos Musicaa", interested=True)],
+            ),
+        ]
+        _, merges = detector.detect_and_unify(forms)
+
+        assert len(merges) == 1
+        score = merges[0].similarity_score
+        assert f"{score}%" in merges[0].decision
+
+
 # ── Estructura del reporte ────────────────────────────────────────────
 
 

@@ -1,3 +1,4 @@
+import asyncio
 import os
 from dotenv import load_dotenv
 from fastapi import FastAPI, HTTPException, Request
@@ -28,6 +29,7 @@ app.add_middleware(
         "http://localhost:5173",
         "http://localhost:5174",
         "http://localhost:5175",
+        "http://localhost:5176",
     ],
     allow_credentials=True,
     allow_methods=["*"],
@@ -113,8 +115,9 @@ async def handle_process_event(request: Request):
             content = await file.read()
             images_bytes.append(content)
 
-        # Ejecutamos el flujo completo del evento
-        result = use_case.execute(event_name, images_bytes)
+        # Ejecutamos el flujo completo en un thread pool para no bloquear el event loop.
+        # use_case.execute es síncrono (time.sleep + requests.post internos).
+        result = await asyncio.to_thread(use_case.execute, event_name, images_bytes)
 
         response = {
             "event_name": event_name,
