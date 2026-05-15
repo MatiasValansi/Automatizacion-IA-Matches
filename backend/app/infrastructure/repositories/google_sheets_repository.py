@@ -24,8 +24,9 @@ class GoogleSheetsMatchRepository(MatchRepository):
             print("⚠️ Error: No se encontró la URL del Webhook de Google.")
             return None
 
-        # Data cruda: una fila por cada voto individual de cada planilla
+        # Data cruda + auditoría: una fila por voto individual
         raw_data = []
+        audit_data = []
         for form in form_results:
             for interaction in form.interactions:
                 raw_data.append({
@@ -33,8 +34,15 @@ class GoogleSheetsMatchRepository(MatchRepository):
                     "vote_for": interaction.receptor_name,
                     "interested": interaction.interested,
                 })
+                audit_data.append({
+                    "nombre_extraido": form.owner.name,
+                    "voto_a": interaction.receptor_name,
+                    "interes": "SI" if interaction.interested else "NO",
+                    "confianza_ia": round(interaction.confidence_score, 2),
+                    "correccion_humana": "",
+                })
 
-        # Payload: data cruda + matches + duplicados + lista de detectados
+        # Payload único: todo en una sola llamada al webhook
         payload = {
             "sheet_name": event_name,
             "raw_data": raw_data,
@@ -44,6 +52,7 @@ class GoogleSheetsMatchRepository(MatchRepository):
             ],
             "duplicates": self._format_duplicates(duplicate_merges or []),
             "participants": sorted(participants) if participants else [],
+            "audit_data": audit_data,
         }
 
         try:

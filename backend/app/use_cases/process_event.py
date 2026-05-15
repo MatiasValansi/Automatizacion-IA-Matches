@@ -123,10 +123,8 @@ class ProcessEventUseCase:
         # ── FASE 2: Matches locales (con datos ya normalizados) ───
         matches = self.match_engine.find_matches(normalized_results)
 
-        # ── FASE 3: Persistencia conjunta ─────────────────────────
-        audit_records = self._form_results_to_audit_records(normalized_results)
+        # ── FASE 3: Persistencia conjunta (una sola llamada al webhook) ──
         unique_participants = self._collect_unique_participants(normalized_results)
-        self.audit_repo.save_audit(event_name, audit_records, unique_participants)
 
         sheet_url = self.repository.save_matches(
             event_name, normalized_results, matches, duplicate_merges, unique_participants
@@ -206,12 +204,17 @@ class ProcessEventUseCase:
     def _collect_unique_participants(
         form_results: list[FormResult],
     ) -> list[str]:
-        """Extrae la lista de participantes únicos (owners + targets)."""
+        """Extrae la lista de participantes únicos (owners + targets).
+        Excluye nombres sintéticos como [NOMBRE ILEGIBLE] o [Propietario No Detectado]."""
         names: set[str] = set()
         for form in form_results:
-            names.add(form.owner.name)
+            name = (form.owner.name or "").strip()
+            if name and not name.startswith("["):
+                names.add(name)
             for interaction in form.interactions:
-                names.add(interaction.receptor_name)
+                receptor = (interaction.receptor_name or "").strip()
+                if receptor and not receptor.startswith("["):
+                    names.add(receptor)
         return sorted(names)
 
     @staticmethod
