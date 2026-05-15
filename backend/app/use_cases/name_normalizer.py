@@ -88,13 +88,16 @@ class NameNormalizer:
 
     def normalize_display(self, text: str) -> str:
         """Normaliza para presentación: Title Case, trim.
-        Preserva [NOMBRE ILEGIBLE] sin modificar."""
+        Preserva [NOMBRE ILEGIBLE] sin modificar.
+        Elimina puntuación residual del OCR (puntos, guiones al final)."""
         if not text:
             return ""
         text = text.strip()
         if text == ILEGIBLE_TAG:
             return text
-        return " ".join(text.split()).title()
+        # Eliminar puntuación residual del OCR en cada token
+        tokens = [t.rstrip(".,- ") for t in text.split() if t.rstrip(".,- ")]
+        return " ".join(tokens).title()
 
     # ── API nueva: unificación inteligente ───────────────────────
 
@@ -131,9 +134,11 @@ class NameNormalizer:
             ra, rb = find(a), find(b)
             if ra == rb:
                 return
-            # El nombre más largo queda como raíz (nombre canónico).
-            # Si empatan en largo, el primero en aparecer gana.
-            if len(ra) >= len(rb):
+            # El nombre más largo (sin puntuación) queda como canónico.
+            # Usar longitud limpia evita que artefactos como "SARA." ganen sobre "SARA".
+            len_ra = len(self._clean(ra))
+            len_rb = len(self._clean(rb))
+            if len_ra >= len_rb:
                 parent[rb] = ra
             else:
                 parent[ra] = rb
@@ -166,6 +171,20 @@ class NameNormalizer:
                     )
                     continue
 
+                # ── Guardia de compatibilidad de canónicos ─────────
+                # Previene uniones transitivas falsas (ej: "Luis Gauto" →
+                # "Luis" → "Jose Luis Mastromano" aunque el score directo sea bajo).
+                canonical_a, canonical_b = find(a), find(b)
+                if canonical_a != a or canonical_b != b:
+                    canon_score = self._unification_score(canonical_a, canonical_b)
+                    if canon_score < self.threshold:
+                        logger.debug(
+                            "[NameNormalizer] Unión transitiva bloqueada: "
+                            "'%s' (via '%s') con '%s' (via '%s'): score canónico %d%%",
+                            a, canonical_a, b, canonical_b, canon_score,
+                        )
+                        continue
+
                 # Unir
                 union(a, b)
                 canonical = find(a)
@@ -176,6 +195,29 @@ class NameNormalizer:
                 decisions.append(
                     f"Se unificó {clean_other} con {clean_canonical} "
                     f"por alta similitud fonética/estructural (similitud: {score}%)."
+                )
+
+        # ── Segunda pasada: abreviaciones por prefijo ──────────────
+        # Detecta casos como "Leo Nonis" → "Leonardo Nonis" donde token_set_ratio
+        # es insuficiente pero los tokens son prefijos unos de otros.
+        for i in range(len(unique)):
+            for j in range(i + 1, len(unique)):
+                a, b = unique[i], unique[j]
+                if find(a) == find(b):
+                    continue
+                if not self._are_prefix_compatible(a, b):
+                    continue
+                if self._have_conflicting_surname_initials(a, b):
+                    continue
+                union(a, b)
+                canonical = find(a)
+                other = b if canonical == a else a
+                decisions.append(
+                    f"Se unificó {self._clean(other).upper()} con "
+                    f"{self._clean(canonical).upper()} por prefijo de nombre."
+                )
+                logger.debug(
+                    "[NameNormalizer] Unificación por prefijo: '%s' → '%s'", other, canonical
                 )
 
         # Construir mapa y grupos finales
@@ -243,16 +285,49 @@ class NameNormalizer:
 
         return init_a != init_b
 
+    # ── Abreviaciones por prefijo ─────────────────────────────────
+
+    def _are_prefix_compatible(self, a: str, b: str) -> bool:
+        """
+        True si ambos nombres tienen el mismo número de tokens (≥ 2) y
+        todos los tokens del nombre más corto son prefijos propios de los
+        tokens correspondientes del nombre más largo.
+
+        Detecta abreviaciones de pila: 'Leo Nonis' vs 'Leonardo Nonis',
+        'Maria A' vs 'Maria Astacho'. No unifica nombres con apellidos distintos.
+        """
+        parts_a = self._clean(a).split()
+        parts_b = self._clean(b).split()
+
+        if len(parts_a) < 2 or len(parts_b) < 2:
+            return False
+        if len(parts_a) != len(parts_b):
+            return False
+
+        # El "corto" es el de tokens más breves en total
+        if sum(len(t) for t in parts_a) <= sum(len(t) for t in parts_b):
+            short, long_ = parts_a, parts_b
+        else:
+            short, long_ = parts_b, parts_a
+
+        # Todos los tokens del corto deben ser prefijos propios del largo
+        has_prefix = any(s != l for s, l in zip(short, long_))
+        return (
+            has_prefix
+            and all(l.startswith(s) for s, l in zip(short, long_))
+        )
+
     # ── Limpieza interna ─────────────────────────────────────────
 
     @staticmethod
     def _clean(text: str) -> str:
-        """Elimina acentos, normaliza espacios y pasa a minúsculas."""
+        """Elimina acentos, normaliza espacios, pasa a minúsculas y
+        elimina puntuación residual de OCR (puntos, guiones al final de token)."""
         text = text.lower().strip()
         text = "".join(
             c for c in unicodedata.normalize("NFD", text)
             if unicodedata.category(c) != "Mn"
         )
-        # Normalizar espacios múltiples
-        text = re.sub(r"\s+", " ", text)
-        return text
+        # Eliminar puntuación residual al final de cada token (artefacto OCR)
+        tokens = [t.rstrip(".,- ") for t in text.split() if t.rstrip(".,- ")]
+        return " ".join(tokens)
