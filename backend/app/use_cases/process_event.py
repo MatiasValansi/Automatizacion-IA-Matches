@@ -129,7 +129,7 @@ class ProcessEventUseCase:
         self.audit_repo.save_audit(event_name, audit_records, unique_participants)
 
         sheet_url = self.repository.save_matches(
-            event_name, normalized_results, matches, duplicate_merges
+            event_name, normalized_results, matches, duplicate_merges, unique_participants
         )
 
         return {

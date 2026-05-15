@@ -18,6 +18,7 @@ class GoogleSheetsMatchRepository(MatchRepository):
         form_results: list,
         matches: list[Match],
         duplicate_merges: list[DuplicateMerge] | None = None,
+        participants: list[str] | None = None,
     ) -> str | None:
         if not self.webhook_url:
             print("⚠️ Error: No se encontró la URL del Webhook de Google.")
@@ -33,7 +34,7 @@ class GoogleSheetsMatchRepository(MatchRepository):
                     "interested": interaction.interested,
                 })
 
-        # Payload con tres secciones: data cruda + matches mutuos + duplicados
+        # Payload: data cruda + matches + duplicados + lista de detectados
         payload = {
             "sheet_name": event_name,
             "raw_data": raw_data,
@@ -42,6 +43,7 @@ class GoogleSheetsMatchRepository(MatchRepository):
                 for m in matches
             ],
             "duplicates": self._format_duplicates(duplicate_merges or []),
+            "participants": sorted(participants) if participants else [],
         }
 
         try:

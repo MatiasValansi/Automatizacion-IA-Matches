@@ -30,11 +30,11 @@ class MatchRepository(ABC):
         form_results: list[FormResult],
         matches: list[Match],
         duplicate_merges: list[DuplicateMerge] | None = None,
+        participants: list[str] | None = None,
     ) -> str | None:
         """
-        Envía la data cruda (form_results), los matches mutuos y
-        las decisiones de deduplicación al repositorio,
-        para persistirlos en pestañas separadas.
+        Envía la data cruda (form_results), los matches mutuos,
+        las decisiones de deduplicación y la lista de participantes detectados.
         Retorna la URL de la hoja creada, o None si falla.
         """
         pass
